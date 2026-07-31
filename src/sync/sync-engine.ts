@@ -21,6 +21,7 @@ import pLimit from "p-limit";
 import type { Config, Profile } from "../config/schema.js";
 import { ErrorCode, ZmailError } from "../core/errors.js";
 import type { SqliteDatabase } from "../db/database.js";
+import { AttachmentRepository } from "../db/repositories/attachment-repository.js";
 import {
   AccountRepository,
   FolderRepository,
@@ -36,7 +37,7 @@ import {
   type NormalizedMessage,
   normalizeListItem,
 } from "../mail/normalize-message.js";
-import { discoverAccount, listFolders, type ZohoClient } from "../zoho/client.js";
+import { discoverAccount, listAttachments, listFolders, type ZohoClient } from "../zoho/client.js";
 import { withRetry } from "./retry.js";
 
 /** 列表单页条数。上限由 Adapter 常量控制，不在业务层散落（§14.2）。 */
@@ -73,6 +74,7 @@ export interface FolderSyncResult {
   updated: number;
   bodiesFetched: number;
   bodyFailures: number;
+  attachmentsIndexed: number;
   markedDeleted: number;
   aborted: boolean;
   error: string | null;
@@ -85,6 +87,7 @@ export interface SyncResult {
   totalInserted: number;
   totalUpdated: number;
   totalBodyFailures: number;
+  totalAttachmentsIndexed: number;
   aborted: boolean;
   elapsedMs: number;
 }
@@ -107,6 +110,7 @@ export class SyncEngine {
   readonly #folders: FolderRepository;
   readonly #syncState: SyncStateRepository;
   readonly #profiles: ProfileRepository;
+  readonly #attachments: AttachmentRepository;
 
   constructor(opts: SyncEngineOptions) {
     this.#db = opts.db;
@@ -118,6 +122,7 @@ export class SyncEngine {
     this.#folders = new FolderRepository(opts.db);
     this.#syncState = new SyncStateRepository(opts.db);
     this.#profiles = new ProfileRepository(opts.db);
+    this.#attachments = new AttachmentRepository(opts.db);
   }
 
   async run(opts: SyncOptions): Promise<SyncResult> {
@@ -182,6 +187,7 @@ export class SyncEngine {
       totalInserted: results.reduce((s, r) => s + r.inserted, 0),
       totalUpdated: results.reduce((s, r) => s + r.updated, 0),
       totalBodyFailures: results.reduce((s, r) => s + r.bodyFailures, 0),
+      totalAttachmentsIndexed: results.reduce((s, r) => s + r.attachmentsIndexed, 0),
       aborted,
       elapsedMs: Date.now() - startedAt,
     };
@@ -216,6 +222,7 @@ export class SyncEngine {
       updated: 0,
       bodiesFetched: 0,
       bodyFailures: 0,
+      attachmentsIndexed: 0,
       markedDeleted: 0,
       aborted: false,
       error: null,
@@ -389,6 +396,32 @@ export class SyncEngine {
                       "UPDATE messages SET matched_identity_id = ? WHERE profile_id = ? AND account_id = ? AND zoho_message_id = ?",
                     )
                     .run(identityId, ctx.profileId, ctx.accountId, messageId);
+                }
+
+                // 附件只同步**元数据**，内容按需下载（§15.1 默认 attachmentMode=metadata）。
+                // 全量下载附件会让首次同步的体积与耗时失控。
+                if (
+                  existing.has_attachments === 1 &&
+                  this.#profile.sync.attachmentMode !== "none"
+                ) {
+                  try {
+                    const metas = await listAttachments(
+                      this.#client,
+                      accountId,
+                      target.folderId,
+                      messageId,
+                    );
+                    if (metas.length > 0) {
+                      this.#attachments.upsertMany(existing.id, metas);
+                      result.attachmentsIndexed += metas.length;
+                    }
+                  } catch (err) {
+                    // 附件元数据失败不影响正文 —— 邮件本身仍然可读可搜
+                    onEvent("sync_attachment_meta_failed", {
+                      folder: target.name,
+                      code: err instanceof ZmailError ? err.code : "UNKNOWN",
+                    });
+                  }
                 }
 
                 if (result.bodiesFetched % 25 === 0) {

@@ -25,7 +25,7 @@ export interface UpsertResult {
   updated: number;
 }
 
-interface MessageRow {
+export interface MessageRow {
   id: number;
   profile_id: string;
   account_id: string;

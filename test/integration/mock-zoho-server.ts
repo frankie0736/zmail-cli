@@ -393,6 +393,22 @@ export class MockZohoServer {
       return;
     }
 
+    const attInfo = new RegExp(
+      `^/api/accounts/${MOCK_ACCOUNT_ID}/folders/(\\d+)/messages/(\\d+)/attachmentinfo$`,
+    ).exec(path);
+    if (attInfo) {
+      this.#handleAttachmentInfo(attInfo[2] as string, res);
+      return;
+    }
+
+    const attDownload = new RegExp(
+      `^/api/accounts/${MOCK_ACCOUNT_ID}/folders/(\\d+)/messages/(\\d+)/attachments/([\\w.-]+)$`,
+    ).exec(path);
+    if (attDownload) {
+      this.#handleAttachmentDownload(attDownload[2] as string, attDownload[3] as string, res);
+      return;
+    }
+
     this.#json(res, 404, { status: { code: 404, description: "Not Found" } });
   }
 
@@ -525,6 +541,69 @@ export class MockZohoServer {
         replyTo: "null",
       },
     });
+  }
+
+  /**
+   * 附件元数据。
+   *
+   * 文件名刻意包含真实世界会遇到的恶意与麻烦形态 ——
+   * 路径穿越、Windows 保留名、中文空格名。导出消毒若有回归，
+   * 集成测试就会在这里失败，而不是等到用户被写坏文件。
+   */
+  #attachmentsFor(messageId: string): Array<{
+    attachmentId: string;
+    attachmentName: string;
+    attachmentSize: number;
+    contentType: string;
+  }> {
+    const msg = this.#messages.find((m) => m.messageId === messageId);
+    if (msg?.hasAttachment !== "1") return [];
+    const idx = this.#messages.indexOf(msg);
+    const names = ["quotation-Q3.pdf", "报价单 2026.pdf", "../../etc/passwd", "CON.txt"];
+    const name = names[idx % names.length] as string;
+    const body = this.#attachmentBody(messageId);
+    return [
+      {
+        attachmentId: `att-${messageId}`,
+        attachmentName: name,
+        attachmentSize: Buffer.byteLength(body),
+        contentType: "application/pdf",
+      },
+    ];
+  }
+
+  /**
+   * 附件内容。每两个**附件**共享一份内容，用于验证内容寻址去重。
+   *
+   * 必须按附件序号分组，不能按邮件序号 —— 附件只出现在部分邮件上
+   * （hasAttachment 每 7 封一次），两个周期错开的话「共享内容」
+   * 从来不会真正共享，去重测试就成了空转。第一版就是这么错的。
+   */
+  #attachmentBody(messageId: string): string {
+    const withAttachments = this.#messages.filter((m) => m.hasAttachment === "1");
+    const ordinal = withAttachments.findIndex((m) => m.messageId === messageId);
+    return `PDF-CONTENT-BLOCK-${Math.floor(Math.max(ordinal, 0) / 2)}`;
+  }
+
+  #handleAttachmentInfo(messageId: string, res: ServerResponse): void {
+    const list = this.#attachmentsFor(messageId);
+    this.#json(res, 200, { status: { code: 200 }, data: { attachments: list } });
+  }
+
+  #handleAttachmentDownload(messageId: string, attachmentId: string, res: ServerResponse): void {
+    const list = this.#attachmentsFor(messageId);
+    const meta = list.find((a) => a.attachmentId === attachmentId);
+    if (!meta) {
+      this.#json(res, 404, { status: { code: 404, description: "Attachment not found" } });
+      return;
+    }
+    const body = this.#attachmentBody(messageId);
+    // 二进制响应，不是 JSON
+    res.writeHead(200, {
+      "content-type": meta.contentType,
+      "content-length": String(Buffer.byteLength(body)),
+    });
+    res.end(body);
   }
 
   #accountPayload(): Record<string, unknown> {

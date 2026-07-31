@@ -9,6 +9,12 @@
 
 import { Command, CommanderError } from "commander";
 import {
+  runAttachmentDownload,
+  runAttachmentList,
+  runAttachmentPath,
+  runAttachmentPrune,
+} from "./commands/attachment.js";
+import {
   runAuthLogin,
   runAuthRefresh,
   runAuthRemove,
@@ -16,6 +22,15 @@ import {
   runAuthSetup,
   runAuthStatus,
 } from "./commands/auth.js";
+import {
+  runDataBackup,
+  runDataPrune,
+  runDataPurge,
+  runDataReset,
+  runDataStats,
+  runDataVerify,
+  runExport,
+} from "./commands/data.js";
 import { runDoctor } from "./commands/doctor.js";
 import { runInit } from "./commands/init.js";
 import { runConfigPath, runConfigShow, runStatus, runVersion } from "./commands/status.js";
@@ -192,12 +207,99 @@ export function buildProgram(streams: Streams = {}): Command {
       await runFolderList(makeContext(program, streams));
     });
 
+  const attachment = requireSubcommand(
+    program.command("attachment").description("附件（元数据随同步入库，内容按需下载）"),
+  );
+  attachment
+    .command("list <messageId>")
+    .description("列出某封邮件的附件")
+    .action(async (messageId: string) => {
+      await runAttachmentList(makeContext(program, streams), messageId);
+    });
+  attachment
+    .command("download <attachmentId>")
+    .description("下载附件内容到本地内容寻址存储")
+    .option("--out <dir>", "同时导出到该目录（文件名会被消毒）")
+    .action(async (attachmentId: string, opts) => {
+      await runAttachmentDownload(makeContext(program, streams), attachmentId, opts);
+    });
+  attachment
+    .command("path <attachmentId>")
+    .description("输出附件在本地的绝对路径")
+    .action(async (attachmentId: string) => {
+      await runAttachmentPath(makeContext(program, streams), attachmentId);
+    });
+  attachment
+    .command("prune")
+    .description("按配额 LRU 回收附件内容（元数据保留）")
+    .option("--dry-run", "只显示将要回收的内容", false)
+    .action(async (opts) => {
+      await runAttachmentPrune(makeContext(program, streams), opts);
+    });
+
   const data = requireSubcommand(program.command("data").description("本地数据维护"));
   data
     .command("rebuild-index")
     .description("从 messages 重建全文索引")
     .action(async () => {
       await runRebuildIndex(makeContext(program, streams));
+    });
+  data
+    .command("stats")
+    .description("分项显示磁盘占用")
+    .action(async () => {
+      await runDataStats(makeContext(program, streams));
+    });
+  data
+    .command("verify")
+    .description("完整性检查：数据库、FTS 索引一致性、附件文件是否还在")
+    .action(async () => {
+      await runDataVerify(makeContext(program, streams));
+    });
+  data
+    .command("backup")
+    .description("备份数据库与配置（不含附件与凭据）")
+    .option("--out <dir>", "备份目录，默认 ~/.zmail/backups/")
+    .action(async (opts) => {
+      await runDataBackup(makeContext(program, streams), opts);
+    });
+  data
+    .command("prune")
+    .description("清理可再生数据以回收空间")
+    .option("--raw-json", "清理原始 JSON", false)
+    .option("--body-html", "清理 HTML 正文（保留纯文本）", false)
+    .option("--remote-deleted", "删除已确认远程删除的邮件", false)
+    .option("--older-than <days>", "只清理早于该天数的（如 30d）", "30d")
+    .action(async (opts) => {
+      await runDataPrune(makeContext(program, streams), opts);
+    });
+  data
+    .command("reset")
+    .description("清除本地数据库与附件，不影响 Zoho 远程邮箱")
+    .option("--local-only", "必须显式指定，以确认只影响本地", false)
+    .option("--yes", "跳过交互确认", false)
+    .action(async (opts) => {
+      await runDataReset(makeContext(program, streams), opts);
+    });
+  data
+    .command("purge")
+    .description("删除整个数据目录")
+    .option("--yes", "跳过交互确认", false)
+    .action(async (opts) => {
+      await runDataPurge(makeContext(program, streams), opts);
+    });
+
+  program
+    .command("export")
+    .description("导出邮件为标准格式（你的数据不被锁定）")
+    .requiredOption("--format <fmt>", "eml | mbox | jsonl", "jsonl")
+    .requiredOption("--out <path>", "eml 需要目录，mbox/jsonl 需要文件路径")
+    .option("--folder <name>", "限定文件夹")
+    .option("--after <date>", "该时间之后")
+    .option("--before <date>", "该时间之前")
+    .option("--limit <n>", "最多导出多少封")
+    .action(async (opts) => {
+      await runExport(makeContext(program, streams), opts);
     });
 
   const auth = requireSubcommand(program.command("auth").description("Zoho 授权管理"));

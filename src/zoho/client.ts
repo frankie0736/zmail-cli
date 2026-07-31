@@ -117,6 +117,80 @@ export class ZohoClient {
       elapsedMs,
     };
   }
+
+  /**
+   * 取原始响应流，不做 JSON 解析。用于附件等二进制内容。
+   *
+   * 刻意不复用 request()：那个方法会把整个响应读成字符串，
+   * 对一个 50 MB 的附件来说既浪费内存又会损坏二进制数据。
+   */
+  async requestRaw(path: string): Promise<Response> {
+    const url = new URL(path, this.#region.mailApiBaseUrl);
+    const send = async (token: string) => {
+      try {
+        return await fetch(url.href, { headers: { authorization: authHeader(token) } });
+      } catch (err) {
+        throw new ZmailError(ErrorCode.NETWORK_ERROR, `下载 ${url.pathname} 失败`, { cause: err });
+      }
+    };
+
+    let res = await send(await this.#tokens.getAccessToken());
+    if (res.status === 401) {
+      this.#onEvent("token_refresh", { reason: "http_401", path: url.pathname });
+      res = await send(await this.#tokens.forceRefresh());
+    }
+
+    this.#onEvent("api_request", { path: url.pathname, status: res.status, binary: true });
+
+    if (res.status === 429) {
+      throw new ZmailError(ErrorCode.RATE_LIMITED, "触发 Zoho 限流", {
+        details: { retryAfter: res.headers.get("retry-after") },
+        retryable: true,
+      });
+    }
+    if (!res.ok) {
+      throw new ZmailError(ErrorCode.ZOHO_API_ERROR, `下载失败 HTTP ${res.status}`, {
+        details: { path: url.pathname, status: res.status },
+        retryable: res.status >= 500,
+      });
+    }
+    return res;
+  }
+}
+
+export interface ZohoAttachmentInfo {
+  attachmentId?: string | number;
+  attachmentName?: string;
+  attachmentSize?: number | string;
+  contentType?: string;
+}
+
+/** 取一封邮件的附件元数据。返回空数组表示没有附件。 */
+export async function listAttachments(
+  client: ZohoClient,
+  accountId: string,
+  folderId: string,
+  messageId: string,
+): Promise<
+  Array<{
+    zohoAttachmentId: string;
+    filename: string | null;
+    mimeType: string | null;
+    sizeBytes: number | null;
+  }>
+> {
+  const res = await client.request<{ attachments?: ZohoAttachmentInfo[] } | ZohoAttachmentInfo[]>(
+    `/api/accounts/${accountId}/folders/${folderId}/messages/${messageId}/attachmentinfo`,
+  );
+  const list = Array.isArray(res.data) ? res.data : (res.data?.attachments ?? []);
+  return list
+    .filter((a) => a.attachmentId !== undefined)
+    .map((a) => ({
+      zohoAttachmentId: toOpaqueId(a.attachmentId, "attachmentId"),
+      filename: normalizeNullish(a.attachmentName),
+      mimeType: normalizeNullish(a.contentType),
+      sizeBytes: a.attachmentSize === undefined ? null : Number(a.attachmentSize) || null,
+    }));
 }
 
 // ---------------------------------------------------------------- 账户与身份
