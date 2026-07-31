@@ -25,7 +25,12 @@ const findings = { step: "0-6", location };
 const redactor = createRedactor();
 redactor.addSecret(cfg.clientSecret).addSecret(cfg.refreshToken);
 
-const gb = (bytes) => `${(Number(bytes) / 1024 ** 3).toFixed(2)} GB`;
+// ⚠️ Zoho 的 usedStorage / allowedStorage 单位是 **KB**，不是字节。
+// 佐证：planStorage=10（GB）时 allowedStorage=10485760，10485760 KB 正好 10 GB。
+// 当成字节会把 10 GB 的邮箱报成 10 MB。
+const KB = 1024;
+const gb = (kb) => `${(Number(kb) / KB / KB).toFixed(2)} GB`;
+const mb = (kb) => `${(Number(kb) / KB).toFixed(2)} MB`;
 
 try {
   console.log("\n=== Phase 0-6: 账户身份 / Alias / 规模 / IMAP / ID 类型 ===\n");
@@ -75,9 +80,11 @@ try {
 
   // ---- 3. 邮箱规模 ----
   findings.storage = {
-    usedBytes: acct.usedStorage ?? null,
-    allowedBytes: acct.allowedStorage ?? null,
-    usedHuman: acct.usedStorage != null ? gb(acct.usedStorage) : null,
+    unit: "KB",
+    usedKb: acct.usedStorage ?? null,
+    allowedKb: acct.allowedStorage ?? null,
+    planStorageGb: acct.planStorage ?? null,
+    usedHuman: acct.usedStorage != null ? mb(acct.usedStorage) : null,
     allowedHuman: acct.allowedStorage != null ? gb(acct.allowedStorage) : null,
     planType: acct.planType ?? null,
   };

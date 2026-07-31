@@ -88,13 +88,16 @@ try {
   const inbox = folders.find((f) => /^inbox$/i.test(f.folderName)) ?? folders[0];
   if (!inbox) throw new Error("没有可用的文件夹");
   const folderId = String(inbox.folderId);
-  findings.probeFolder = { name: inbox.folderName, messageCount: inbox.messageCount ?? null };
-  console.log(`探测文件夹: ${inbox.folderName}（${inbox.messageCount ?? "?"} 封）\n`);
+  // 注意：folders 接口**不返回** messageCount。实测可用字段为
+  // path / VW / HIDE / isArchived / folderIcon / folderName / imapAccess / folderType / URI / folderId
+  findings.probeFolder = { name: inbox.folderName, availableFields: Object.keys(inbox) };
+  console.log(`探测文件夹: ${inbox.folderName}\n`);
 
   // ---- A. 列表 API 单页上限 ----
   // Zoho 文档给的上限未必等于实际行为，逐档试出来。
   console.log("A. 探测列表分页上限…");
   findings.pageLimits = [];
+  let previousReturned = null;
   for (const limit of [50, 100, 200, 250, 500]) {
     if (callsUsed >= BUDGET) break;
     const res = await call(`/api/accounts/${accountId}/messages/view`, {
@@ -106,13 +109,45 @@ try {
     console.log(
       `   limit=${String(limit).padStart(3)} → 返回 ${returned ?? "错误"} 条 (HTTP ${res.status})`,
     );
-    if (returned !== null && returned < limit) {
-      console.log(`   ↑ 实际上限约为 ${returned}`);
+    if (returned === null) break;
+
+    // 「返回条数 < 请求条数」有两种截然不同的原因：
+    //   a) 服务端分页上限就是这么多  → 这才是我们要测的
+    //   b) 文件夹里根本没那么多邮件  → 与分页上限无关
+    // 区分方法：提高 limit 后返回条数是否随之增长。不增长说明是 (b)。
+    if (returned < limit) {
+      if (previousReturned !== null && returned === previousReturned) {
+        findings.pageSizeReliable = true;
+        findings.maxPageSize = returned;
+        console.log(`   ↑ 提高 limit 后返回数不变，分页上限确认为 ${returned}`);
+      } else if (previousReturned === null) {
+        // 第一档就没填满，继续抬高 limit 才能区分 (a) 和 (b)
+        previousReturned = returned;
+        continue;
+      } else {
+        findings.pageSizeReliable = true;
+        findings.maxPageSize = returned;
+      }
       break;
     }
+    previousReturned = returned;
   }
-  const best = findings.pageLimits.filter((p) => p.returned).pop();
-  findings.maxPageSize = best?.returned ?? null;
+
+  if (findings.maxPageSize === undefined) {
+    const filled = findings.pageLimits.filter((p) => p.returned === p.requested).pop();
+    if (filled) {
+      // 所有档位都被填满 → 上限至少是最后一档，但没测到天花板
+      findings.maxPageSize = filled.requested;
+      findings.pageSizeReliable = false;
+      console.log(`   所有档位都填满，分页上限 >= ${filled.requested}（未触及天花板）`);
+    } else {
+      const returned = findings.pageLimits.at(-1)?.returned ?? null;
+      findings.maxPageSize = null;
+      findings.pageSizeReliable = false;
+      findings.pageSizeNote = `文件夹只有约 ${returned} 封邮件，不足以测出分页上限`;
+      console.log(`   ⚠️ 文件夹只有约 ${returned} 封，测不出分页上限 —— 需要更大的邮箱重测`);
+    }
+  }
 
   // ---- B. 取一批 messageId 供后续正文测试 ----
   const listRes = await call(`/api/accounts/${accountId}/messages/view`, {
@@ -244,31 +279,39 @@ try {
   }
 
   // ---- G. 推算全量同步成本 ----
+  // 不去数当前邮箱有多少封 —— 数一遍本身就要遍历全部分页，代价和同步差不多，
+  // 而且当前体量未必代表将来。改为按若干假设规模给出推算表。
   const prior = readOut("findings-0-6.json");
-  const usedBytes = prior?.storage?.usedBytes ?? null;
-  const totalMessages = folders.reduce((sum, f) => sum + (Number(f.messageCount) || 0), 0) || null;
-
   const perMessageMs =
     findings.concurrency4?.perRequestMs ?? findings.sequentialLatency?.p50 ?? null;
-  if (totalMessages && perMessageMs) {
-    // 每封邮件：1 次正文请求；列表请求按每页 maxPageSize 摊
-    const listCalls = Math.ceil(totalMessages / (findings.maxPageSize || 200));
-    const totalCalls = totalMessages + listCalls;
+
+  if (perMessageMs) {
+    const pageSize = findings.maxPageSize || 200;
     findings.fullSyncEstimate = {
-      totalMessages,
-      listCalls,
-      totalApiCalls: totalCalls,
-      estimatedMs: totalMessages * perMessageMs,
-      estimatedHuman: humanDuration(totalMessages * perMessageMs),
-      mailboxUsedBytes: usedBytes,
+      perMessageMs,
+      assumedPageSize: pageSize,
+      pageSizeIsReliable: findings.pageSizeReliable === true,
+      mailboxUsedKb: prior?.storage?.usedKb ?? null,
+      scenarios: [1_000, 10_000, 50_000, 100_000].map((n) => ({
+        messages: n,
+        apiCalls: n + Math.ceil(n / pageSize),
+        estimatedMs: n * perMessageMs,
+        estimatedHuman: humanDuration(n * perMessageMs),
+      })),
     };
-    console.log("\n──────── 全量同步推算 ────────");
-    console.log(`邮件总数        ${totalMessages}`);
-    console.log(`预计 API 调用   ${totalCalls} 次`);
-    console.log(`预计耗时        ${humanDuration(totalMessages * perMessageMs)}（并发 4）`);
-    console.log("──────────────────────────────");
-    console.log("\n把这个数字和 Zoho 对你套餐的每日调用上限对比。");
-    console.log("如果调用数超过每日上限，必须修订 §3.1 / §8.4 / §14：");
+
+    console.log("\n──────── 全量同步推算（并发 4）────────");
+    console.log("   邮件数     API 调用          耗时");
+    for (const s of findings.fullSyncEstimate.scenarios) {
+      console.log(
+        `  ${String(s.messages).padStart(7)}  ${String(s.apiCalls).padStart(9)}  ${s.estimatedHuman.padStart(12)}`,
+      );
+    }
+    console.log("────────────────────────────────────────");
+    if (!findings.pageSizeReliable) {
+      console.log(`⚠️ 分页上限未测出（邮件太少），上表按假设的 ${pageSize} 计算。`);
+    }
+    console.log("\n把 API 调用数与你套餐的每日上限对比。超出则必须修订 §3.1 / §8.4 / §14：");
     console.log("  · 默认只同步最近 N 个月");
     console.log("  · 支持跨天续传");
     console.log("  · 或改走 IMAP 批量取正文（见 04-imap.mjs）");
