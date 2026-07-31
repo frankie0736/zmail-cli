@@ -40,6 +40,22 @@ export function writeOut(name, content) {
   return p;
 }
 
+/**
+ * 读回一份先前 spike 的产物。
+ * 让后续脚本能复用前面的结论（例如 0-2 用 0-6 报告的邮箱体积做推算）。
+ * @param {string} name 文件名
+ * @returns {any | null} 不存在或无法解析时返回 null
+ */
+export function readOut(name) {
+  const p = join(OUT_DIR, name);
+  if (!existsSync(p)) return null;
+  try {
+    return JSON.parse(readFileSync(p, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 /** 从环境变量或 .secrets.json 读取必需配置，缺失则给出可操作的报错。 */
 export function requireConfig(keys) {
   const secrets = loadSecrets();

@@ -51,13 +51,78 @@ node spikes/01-oauth.mjs --refresh
 
 # 0-6  账户身份 / alias / 邮箱规模 / IMAP 可用性 / ID 类型
 node spikes/02-account.mjs
+
+# 0-2  API 配额与速率限制 ⚠️ 消耗真实配额
+node spikes/03-quota.mjs
+
+# 0-4  IMAP + XOAUTH2 可行性
+node spikes/04-imap.mjs
 ```
 
-**先跑 0-6**（即 `02-account.mjs`）的理由：它只需要一次 API 调用，却能同时校准
-0-2 的配额推算，并直接决定 0-4 的 IMAP 探测是否值得做。
+**顺序是有依赖的，不要打乱：**
 
-后续脚本（`03-quota.mjs` / `04-imap.mjs` / `05-fixtures.mjs`）会在 0-6 有结论后补上——
-因为它们的设计取决于 0-6 报告的邮箱规模和 IMAP 开关。
+`02-account.mjs` 必须在 `03` 和 `04` 之前跑。它一次调用就能产出四项结论，
+其中两项直接影响后面的脚本：
+
+- `usedStorage` → `03` 用它推算全量同步成本，不用瞎猜
+- `imapAccessEnabled` → `04` 读到 IMAP 未启用时会**直接跳过并退出**，省下 2 小时
+
+`03-quota.mjs` 也应在 `04` 之前，这样 `04` 才能给出 REST vs IMAP 的对比推算。
+
+### 各脚本的额外参数
+
+```bash
+node spikes/03-quota.mjs --budget 300     # 放宽调用预算（默认 120）
+node spikes/03-quota.mjs --probe-429      # 探测限流阈值（会被短暂限流）
+node spikes/04-imap.mjs --fetch 20        # 批量取正文的样本数（默认 10）
+```
+
+---
+
+## ⚠️ 这两个脚本会碰你的真实资源
+
+### `03-quota.mjs` 消耗真实 API 配额
+
+它的目的就是测出配额，所以必然要花配额。防护措施：
+
+- 默认硬上限 **120 次调用**，超出立即停止
+- 每次调用都计数，结论随时可落盘
+- `Ctrl+C` 会保存已获得的部分结论，不会白跑
+- 429 阈值探测**默认关闭**，需要显式加 `--probe-429`——开启后你会被
+  短暂限流，正常使用可能受影响几分钟
+
+跑完后请到 Zoho 控制台查你套餐的每日 API 上限，手工填进
+`findings-0-2.json` 的 `dailyQuota` 字段。脚本测不出这个数字，只能测出速率。
+
+### `04-imap.mjs` 访问你的真实邮箱
+
+已在代码层面强制只读，并有测试守护：
+
+| 约束 | 原因 |
+|---|---|
+| 只用 `EXAMINE`，绝不用 `SELECT` | `EXAMINE` 以只读方式打开邮箱 |
+| 只用 `BODY.PEEK[]`，绝不用 `BODY[]` | 后者会把邮件**标记为已读** |
+| 不发送 `STORE` / `EXPUNGE` / `APPEND` | 任何写操作都会在真实邮箱留下痕迹 |
+
+这三条有专门的断言：测试会检查整个会话里实际发出的命令，出现上述任一
+禁止命令即失败。
+
+---
+
+## 结论会反向修订实施计划
+
+这不是走过场的验证，两项结论可能推翻已有设计：
+
+**`03-quota.mjs`**——当前设计是每封邮件一次正文请求。如果每日配额撑不住，
+必须修订 §3.1（MVP 目标）、§8.4（默认只同步最近 N 个月）、§14（跨天续传）。
+
+**`04-imap.mjs`**——如果 IMAP + XOAUTH2 可用且 UID 增量同步成立，
+§4 的「不做通用 IMAP 客户端」这条非目标需要重新考虑，§14.3 的 400 封重叠
+扫描和 §14.7 的对账逻辑可以大幅简化。注意结论**不是**推翻 REST——REST 在
+thread、label、草稿、发送上仍然更好，可能的结论是混合方案。
+
+跑完四个脚本后，把结论汇总进 `docs/phase-0-findings.md`，然后我们回头改
+实施计划，再开始 Phase 2。
 
 ---
 
@@ -69,6 +134,8 @@ node spikes/02-account.mjs
 |---|---|---|
 | `findings-0-1.json` | OAuth 流程结论 | ✅ 可摘录进 `docs/phase-0-findings.md` |
 | `findings-0-6.json` | 身份 / 规模 / IMAP / ID 类型结论 | ✅ 同上 |
+| `findings-0-2.json` | 配额、分页上限、并发与限流结论 | ✅ 同上 |
+| `findings-0-4.json` | IMAP 可行性与 REST 对比 | ✅ 同上 |
 | `fixture-account-detail.json` | **已脱敏**的账户响应 | ✅ 复核后可作为 MockZohoServer 数据源 |
 | `fixture-account-detail.raw.json` | **未脱敏**原始响应 | ❌ 仅本地比对，绝不提交 |
 | `redaction-mapping.json` | 真实地址 → 假地址映射 | ❌ 绝不提交 |
