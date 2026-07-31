@@ -126,6 +126,11 @@ export async function loginWithLoopback(opts: LoginOptions): Promise<TokenRespon
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      // server.close() 只是停止接受新连接，它会**等待已有连接自然关闭**。
+      // 浏览器默认 keep-alive，不会主动断开，于是授权成功后终端要干等几秒，
+      // 而失败后立刻重试则会撞上 EADDRINUSE 永远登不上。
+      // 必须显式掐断存量连接 —— 回调页已经发完，没有什么可等的。
+      server.closeAllConnections();
       server.close(() => fn(arg as never));
     };
 
@@ -142,7 +147,7 @@ export async function loginWithLoopback(opts: LoginOptions): Promise<TokenRespon
 
       if (err) {
         res
-          .writeHead(400, { "content-type": "text/html; charset=utf-8" })
+          .writeHead(400, { "content-type": "text/html; charset=utf-8", connection: "close" })
           .end(page("授权被拒绝", `Zoho 返回：<code>${err}</code>。可以关闭此页。`));
         finish(reject, new ZmailError(ErrorCode.AUTH_REQUIRED, `授权被拒绝: ${err}`));
         return;
@@ -151,7 +156,7 @@ export async function loginWithLoopback(opts: LoginOptions): Promise<TokenRespon
       // state 校验必须发生在使用 code 之前
       if (!gotState || !safeEqual(gotState, state)) {
         res
-          .writeHead(400, { "content-type": "text/html; charset=utf-8" })
+          .writeHead(400, { "content-type": "text/html; charset=utf-8", connection: "close" })
           .end(page("state 校验失败", "请求可能被篡改，已中止。"));
         finish(
           reject,
@@ -162,14 +167,14 @@ export async function loginWithLoopback(opts: LoginOptions): Promise<TokenRespon
 
       if (!gotCode) {
         res
-          .writeHead(400, { "content-type": "text/html; charset=utf-8" })
+          .writeHead(400, { "content-type": "text/html; charset=utf-8", connection: "close" })
           .end(page("缺少 code", "回调中没有授权码。"));
         finish(reject, new ZmailError(ErrorCode.AUTH_REQUIRED, "OAuth 回调缺少 code"));
         return;
       }
 
       res
-        .writeHead(200, { "content-type": "text/html; charset=utf-8" })
+        .writeHead(200, { "content-type": "text/html; charset=utf-8", connection: "close" })
         .end(page("授权成功", "可以关闭此页，回到终端继续。"));
       finish(resolve as (v: never) => void, gotCode);
     });
