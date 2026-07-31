@@ -514,8 +514,11 @@ export class MockZohoServer {
         content: `<div>${msg.body.replace(/\n/g, "<br>")}</div>`,
         subject: msg.subject,
         fromAddress: msg.fromAddress,
-        toAddress: msg.toAddress,
-        ccAddress: msg.ccAddress,
+        // ⚠️ 真实的正文响应会把地址字段做 HTML 转义。不复现这一点的话，
+        // 「实体未解码导致身份匹配全部落空」这个 bug 测试永远抓不到 ——
+        // 它就是在真实邮箱上才暴露的。
+        toAddress: `&quot;Owner&quot; &lt;${msg.toAddress}&gt;`,
+        ccAddress: msg.ccAddress ? `&lt;${msg.ccAddress}&gt;` : "",
         receivedTime: msg.receivedTime,
         // 脏数据：字符串 "null" 与空字符串，与真实响应一致
         bccAddress: "",

@@ -99,8 +99,12 @@ export class ZohoClient {
       });
     }
     if (!res.ok) {
+      // 5xx 是服务端暂时故障，值得重试；4xx 是请求本身有问题，重试只是
+      // 把「失败」变成「三倍延迟后的失败」，还白白消耗配额（§14.5）。
+      const retryable = res.status >= 500;
       throw new ZmailError(ErrorCode.ZOHO_API_ERROR, `Zoho API 返回 HTTP ${res.status}`, {
         details: { path: url.pathname, status: res.status },
+        retryable,
       });
     }
 

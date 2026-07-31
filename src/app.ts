@@ -19,6 +19,14 @@ import {
 import { runDoctor } from "./commands/doctor.js";
 import { runInit } from "./commands/init.js";
 import { runConfigPath, runConfigShow, runStatus, runVersion } from "./commands/status.js";
+import {
+  runFolderList,
+  runMessageGet,
+  runRebuildIndex,
+  runSearch,
+  runSync,
+  runThreadGet,
+} from "./commands/sync.js";
 import { Context, type GlobalOptions, type Streams } from "./core/context.js";
 import {
   ErrorCode,
@@ -126,6 +134,70 @@ export function buildProgram(streams: Streams = {}): Command {
     .description("输出当前配置内容")
     .action(async () => {
       await runConfigShow(makeContext(program, streams));
+    });
+
+  program
+    .command("sync")
+    .description("从 Zoho 同步邮件到本地")
+    .option("--full", "全量同步并对账（默认为快速同步）", false)
+    .option("--quick", "只扫描最新若干封（默认）", false)
+    .option("--folder <name>", "只同步指定文件夹")
+    .action(async (opts) => {
+      await runSync(makeContext(program, streams), opts);
+    });
+
+  program
+    .command("search [terms...]")
+    .description("在本地镜像中全文搜索（中英文均可）")
+    .option("--query <text>", "关键词，安全转义后按 AND 组合")
+    .option("--phrase <text>", "精确短语")
+    .option("--any <text...>", "任一关键词命中即可")
+    .option("--exclude <text...>", "排除这些关键词")
+    .option("--raw-fts <expr>", "直接传 FTS5 表达式（中文多半查不到）")
+    .option("--from <address>", "发件人地址")
+    .option("--from-domain <domain>", "发件人域名")
+    .option("--to <address>", "收件人地址")
+    .option("--folder <name>", "限定文件夹")
+    .option("--after <date>", "该时间之后，ISO 8601")
+    .option("--before <date>", "该时间之前，ISO 8601")
+    .option("--unread", "只看未读", false)
+    .option("--has-attachment", "只看有附件的", false)
+    .option("--limit <n>", "返回条数", "20")
+    .option("--sort <mode>", "relevance | newest | oldest", "relevance")
+    .action(async (terms: string[], opts) => {
+      await runSearch(makeContext(program, streams), terms?.join(" ") || undefined, opts);
+    });
+
+  const message = requireSubcommand(program.command("message").description("读取单封邮件"));
+  message
+    .command("get <messageId>")
+    .description("按 ID 读取邮件全文")
+    .action(async (messageId: string) => {
+      await runMessageGet(makeContext(program, streams), messageId);
+    });
+
+  const thread = requireSubcommand(program.command("thread").description("读取线程"));
+  thread
+    .command("get <threadId>")
+    .description("按 ID 读取整个线程")
+    .action(async (threadId: string) => {
+      await runThreadGet(makeContext(program, streams), threadId);
+    });
+
+  const folder = requireSubcommand(program.command("folder").description("文件夹"));
+  folder
+    .command("list")
+    .description("列出文件夹及其同步状态")
+    .action(async () => {
+      await runFolderList(makeContext(program, streams));
+    });
+
+  const data = requireSubcommand(program.command("data").description("本地数据维护"));
+  data
+    .command("rebuild-index")
+    .description("从 messages 重建全文索引")
+    .action(async () => {
+      await runRebuildIndex(makeContext(program, streams));
     });
 
   const auth = requireSubcommand(program.command("auth").description("Zoho 授权管理"));
