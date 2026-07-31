@@ -11,8 +11,30 @@
 import { createHash } from "node:crypto";
 
 const FAKE_DOMAINS = ["example.com", "example.org", "example.net", "test.invalid"];
-const FIRST = ["alex", "blake", "casey", "dana", "eden", "finley", "gray", "harper", "indigo", "jordan"];
-const LAST = ["adams", "brooks", "chen", "diaz", "evans", "fisher", "grant", "hayes", "ito", "jones"];
+const FIRST = [
+  "alex",
+  "blake",
+  "casey",
+  "dana",
+  "eden",
+  "finley",
+  "gray",
+  "harper",
+  "indigo",
+  "jordan",
+];
+const LAST = [
+  "adams",
+  "brooks",
+  "chen",
+  "diaz",
+  "evans",
+  "fisher",
+  "grant",
+  "hayes",
+  "ito",
+  "jones",
+];
 
 /** 稳定哈希 → 索引，保证同一输入永远得到同一假值。 */
 const pick = (list, seed) =>
@@ -33,10 +55,10 @@ export function createRedactor({ keepDomains = [] } = {}) {
       if (!addr) return addr;
       const lower = String(addr).toLowerCase();
       if (emailMap.has(lower)) return emailMap.get(lower);
-      const [local, domain = ""] = lower.split("@");
+      const domain = lower.split("@")[1] ?? "";
       const fake = keepDomains.includes(domain)
         ? `${pick(FIRST, lower)}@${domain}`
-        : `${pick(FIRST, lower)}.${pick(LAST, lower + "x")}@${pick(FAKE_DOMAINS, domain)}`;
+        : `${pick(FIRST, lower)}.${pick(LAST, `${lower}x`)}@${pick(FAKE_DOMAINS, domain)}`;
       emailMap.set(lower, fake);
       return fake;
     },

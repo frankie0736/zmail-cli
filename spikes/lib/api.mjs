@@ -77,14 +77,27 @@ export async function apiRequest(path, opts) {
     }),
   );
 
-  return { status: res.status, ok: res.ok, headers: Object.fromEntries(res.headers), rawText, parsed, lossy, parseError, elapsedMs, url: url.href };
+  return {
+    status: res.status,
+    ok: res.ok,
+    headers: Object.fromEntries(res.headers),
+    rawText,
+    parsed,
+    lossy,
+    parseError,
+    elapsedMs,
+    url: url.href,
+  };
 }
 
 /** Zoho 把业务错误包在 200 里，需要单独判断。 */
 export function assertApiOk(result, what) {
   if (!result.ok) {
     const code = result.parsed?.data?.errorCode ?? result.parsed?.status?.code ?? result.status;
-    const desc = result.parsed?.data?.moreInfo ?? result.parsed?.status?.description ?? result.rawText.slice(0, 300);
+    const desc =
+      result.parsed?.data?.moreInfo ??
+      result.parsed?.status?.description ??
+      result.rawText.slice(0, 300);
     throw new Error(`${what} 失败 (HTTP ${result.status}, code=${code}): ${desc}`);
   }
   return result;

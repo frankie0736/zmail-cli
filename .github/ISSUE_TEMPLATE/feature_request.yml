@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest a capability
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the non-goals first — some things are deliberately out of scope:
+        no mail GUI, no general IMAP client, no other providers, no SaaS,
+        no remote delete, and no sending without explicit human approval.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the situation, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: who
+    attributes:
+      label: Who is this for?
+      options:
+        - An AI agent consuming --json output
+        - A human using the terminal directly
+        - Both
+    validations:
+      required: true

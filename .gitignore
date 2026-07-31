@@ -16,3 +16,5 @@ spikes/out/
 # 杂项
 .DS_Store
 *.log
+
+.env*

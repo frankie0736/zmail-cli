@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支的新推送取消旧的运行，避免排队浪费
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 静态检查只需跑一次，不必进矩阵
+  static:
+    name: typecheck + lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # 一个组合失败不掩盖其他组合的结果 —— 平台差异正是这个矩阵存在的原因
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      # better-sqlite3 是原生模块，是本项目最主要的安装失败来源。
+      # 这一步在三个操作系统上失败，就说明真实用户也会失败。
+      - name: Install (builds better-sqlite3)
+        run: pnpm install --frozen-lockfile
+
+      # 关键断言：没有任何 Zoho 凭据时测试必须全绿（CONTRIBUTING.md 的核心承诺）
+      - name: Test without any credentials
+        run: pnpm test
+        env:
+          ZMAIL_LIVE_TEST: ""
+
+      - run: pnpm build
+
+      - name: Global install smoke test
+        run: pnpm smoke
+
+  # Windows 的路径与权限语义差异较大，MVP 阶段允许失败但必须可见
+  windows-tolerance:
+    name: windows notes
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+      - name: Report
+        run: |
+          echo "Windows 结果见上方矩阵。POSIX 权限检查在 Windows 上跳过（见 src/config/paths.ts）。"

@@ -13,8 +13,8 @@
  *   node spikes/01-oauth.mjs --refresh  # 只用已存的 refresh token 换 access token
  */
 
-import { loginWithLoopback, refreshAccessToken, READ_SCOPES, REDIRECT_URI } from "./lib/oauth.mjs";
-import { loadSecrets, saveSecrets, writeOut, requireConfig } from "./lib/store.mjs";
+import { loginWithLoopback, READ_SCOPES, REDIRECT_URI, refreshAccessToken } from "./lib/oauth.mjs";
+import { loadSecrets, requireConfig, saveSecrets, writeOut } from "./lib/store.mjs";
 
 const refreshOnly = process.argv.includes("--refresh");
 const cfg = requireConfig(["clientId", "clientSecret"]);
@@ -40,14 +40,18 @@ try {
     console.log("✅ refresh 成功");
     console.log(`   access token 有效期: ${tok.expires_in} 秒`);
     console.log(`   响应字段: ${findings.refreshResponseKeys.join(", ")}`);
-    console.log(`   刷新时是否附带新 refresh_token: ${findings.returnsNewRefreshTokenOnRefresh ? "是" : "否"}`);
+    console.log(
+      `   刷新时是否附带新 refresh_token: ${findings.returnsNewRefreshTokenOnRefresh ? "是" : "否"}`,
+    );
   } else {
     // ---- 完整 loopback 授权 ----
     console.log("\n=== Phase 0-1: Zoho OAuth Loopback Spike ===");
     console.log(`数据中心: ${location}`);
     console.log(`回调地址: ${REDIRECT_URI}`);
     console.log(`申请 scope: ${READ_SCOPES.join(", ")}`);
-    console.log("\n⚠️  确认你已在 Zoho API Console 中把上面的回调地址注册为 Authorized Redirect URI，");
+    console.log(
+      "\n⚠️  确认你已在 Zoho API Console 中把上面的回调地址注册为 Authorized Redirect URI，",
+    );
     console.log("    否则 Zoho 会直接报 redirect_uri_mismatch。");
 
     const t0 = Date.now();
@@ -82,13 +86,20 @@ try {
   findings.error = err.message;
   console.error(`\n❌ ${err.message}`);
   if (/redirect_uri/i.test(err.message)) {
-    console.error(`\n   请在 Zoho API Console 中把 Authorized Redirect URI 设为：\n   ${REDIRECT_URI}`);
+    console.error(
+      `\n   请在 Zoho API Console 中把 Authorized Redirect URI 设为：\n   ${REDIRECT_URI}`,
+    );
   }
   if (/invalid_client/i.test(err.message)) {
-    console.error("\n   Client ID / Secret 不匹配，或所选数据中心不对（试试 ZMAIL_LOCATION=eu 等）。");
+    console.error(
+      "\n   Client ID / Secret 不匹配，或所选数据中心不对（试试 ZMAIL_LOCATION=eu 等）。",
+    );
   }
 } finally {
-  const p = writeOut(`findings-0-1${refreshOnly ? "-refresh" : ""}.json`, JSON.stringify(findings, null, 2));
+  const p = writeOut(
+    `findings-0-1${refreshOnly ? "-refresh" : ""}.json`,
+    JSON.stringify(findings, null, 2),
+  );
   console.log(`\n结论已写入: ${p}\n`);
   process.exit(findings.ok ? 0 : 1);
 }

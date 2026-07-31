@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只打包不发布"
+        type: boolean
+        default: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      # OIDC token，用于 npm Trusted Publishing —— 仓库中不存在任何长期 npm token
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # npm >= 11.5.1 才支持 Trusted Publishing
+      - run: npm install -g npm@latest
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+      # 发布前最后一道闸：全局安装真的能用吗
+      - run: pnpm smoke
+
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag v$TAG 与 package.json 的 $PKG 不一致"
+            exit 1
+          fi
+
+      - name: Inspect package contents
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
+        # provenance 让用户可以验证 tarball 确实由本仓库的这个 commit 构建
+        run: npm publish --provenance --access public
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF#refs/tags/}" --generate-notes

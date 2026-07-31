@@ -6,7 +6,7 @@
  * spikes/.secrets.json（已 gitignore，权限 0600）。
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -52,7 +52,7 @@ export function requireConfig(keys) {
     else out[k] = v;
   }
   if (missing.length) {
-    console.error("\n缺少必需配置：\n  " + missing.join("\n  "));
+    console.error(`\n缺少必需配置：\n  ${missing.join("\n  ")}`);
     console.error("\n请先阅读 spikes/README.md 完成 Zoho API Console 注册。\n");
     process.exit(2);
   }

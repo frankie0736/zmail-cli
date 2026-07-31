@@ -1,0 +1,75 @@
+name: Bug report
+description: Something is not working
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ⚠️ Before you paste anything
+
+        **Do not include real email content, real email addresses, OAuth tokens,
+        client secrets, or passphrases in this issue.** This is a public page.
+
+        `zmail doctor --json` is designed to be safe to share — email addresses
+        are masked and no credential material is included. Please use it instead
+        of pasting configuration or logs by hand.
+
+        For security vulnerabilities, do **not** open an issue.
+        Use [private vulnerability reporting](https://github.com/frankie0736/zmail-cli/security/advisories/new).
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `zmail doctor --json`
+      description: This is automatically redacted and is the fastest path to a diagnosis.
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the exact command you ran. Replace real addresses with placeholders.
+      placeholder: |
+        1. zmail sync --quick --json
+        2. zmail search "..." --json
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: install-method
+    attributes:
+      label: How did you install it?
+      placeholder: npm install -g zmail-cli / from source / other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Credential backend
+      description: Shown in the `secret-backend` line of `zmail doctor`.
+      options:
+        - keychain (macOS)
+        - file (encrypted file)
+        - not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have not included real email content, addresses, or credentials in this report.
+          required: true

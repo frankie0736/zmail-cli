@@ -10,9 +10,9 @@
  *   - Access Token 不落盘
  */
 
-import { createServer } from "node:http";
-import { randomBytes, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createServer } from "node:http";
 import { parsePreservingBigInts } from "./json-safe.mjs";
 
 export const CALLBACK_PORT = 53682;
@@ -31,11 +31,23 @@ export const READ_SCOPES = [
  * spike 阶段先覆盖已知区域，正式版进 ZohoRegionResolver。
  */
 export const REGIONS = {
-  com: { accounts: "https://accounts.zoho.com", mail: "https://mail.zoho.com", imap: "imap.zoho.com" },
+  com: {
+    accounts: "https://accounts.zoho.com",
+    mail: "https://mail.zoho.com",
+    imap: "imap.zoho.com",
+  },
   eu: { accounts: "https://accounts.zoho.eu", mail: "https://mail.zoho.eu", imap: "imap.zoho.eu" },
   in: { accounts: "https://accounts.zoho.in", mail: "https://mail.zoho.in", imap: "imap.zoho.in" },
-  "com.cn": { accounts: "https://accounts.zoho.com.cn", mail: "https://mail.zoho.com.cn", imap: "imap.zoho.com.cn" },
-  "com.au": { accounts: "https://accounts.zoho.com.au", mail: "https://mail.zoho.com.au", imap: "imap.zoho.com.au" },
+  "com.cn": {
+    accounts: "https://accounts.zoho.com.cn",
+    mail: "https://mail.zoho.com.cn",
+    imap: "imap.zoho.com.cn",
+  },
+  "com.au": {
+    accounts: "https://accounts.zoho.com.au",
+    mail: "https://mail.zoho.com.au",
+    imap: "imap.zoho.com.au",
+  },
   jp: { accounts: "https://accounts.zoho.jp", mail: "https://mail.zoho.jp", imap: "imap.zoho.jp" },
 };
 
@@ -54,9 +66,8 @@ function safeEqual(a, b) {
 }
 
 function openBrowser(url) {
-  const cmd = process.platform === "darwin" ? "open"
-    : process.platform === "win32" ? "cmd"
-    : "xdg-open";
+  const cmd =
+    process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
   const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
   try {
     spawn(cmd, args, { stdio: "ignore", detached: true }).unref();
@@ -77,7 +88,13 @@ const PAGE = (title, body) =>
  * @param {{clientId: string, clientSecret: string, location?: string, scopes?: string[], timeoutMs?: number}} opts
  */
 export async function loginWithLoopback(opts) {
-  const { clientId, clientSecret, location = "com", scopes = READ_SCOPES, timeoutMs = 180_000 } = opts;
+  const {
+    clientId,
+    clientSecret,
+    location = "com",
+    scopes = READ_SCOPES,
+    timeoutMs = 180_000,
+  } = opts;
   const region = resolveRegion(location);
   const state = randomBytes(24).toString("base64url");
 
@@ -110,23 +127,27 @@ export async function loginWithLoopback(opts) {
       const gotCode = url.searchParams.get("code");
 
       if (err) {
-        res.writeHead(400, { "content-type": "text/html; charset=utf-8" })
+        res
+          .writeHead(400, { "content-type": "text/html; charset=utf-8" })
           .end(PAGE("授权被拒绝", `Zoho 返回：<code>${err}</code>。可以关闭此页。`));
         return finish(reject, new Error(`授权被拒绝: ${err}`));
       }
       // state 校验必须在使用 code 之前
       if (!gotState || !safeEqual(gotState, state)) {
-        res.writeHead(400, { "content-type": "text/html; charset=utf-8" })
+        res
+          .writeHead(400, { "content-type": "text/html; charset=utf-8" })
           .end(PAGE("state 校验失败", "请求可能被篡改，已中止。"));
         return finish(reject, new Error("state 校验失败，可能存在 CSRF"));
       }
       if (!gotCode) {
-        res.writeHead(400, { "content-type": "text/html; charset=utf-8" })
+        res
+          .writeHead(400, { "content-type": "text/html; charset=utf-8" })
           .end(PAGE("缺少 code", "回调中没有授权码。"));
         return finish(reject, new Error("回调缺少 code"));
       }
 
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+      res
+        .writeHead(200, { "content-type": "text/html; charset=utf-8" })
         .end(PAGE("授权成功", "可以关闭此页，回到终端继续。"));
       finish(resolve, gotCode);
     });
@@ -141,7 +162,11 @@ export async function loginWithLoopback(opts) {
     server.listen(CALLBACK_PORT, "127.0.0.1", () => {
       console.log(`\n本地回调服务已启动: ${REDIRECT_URI}`);
       const opened = openBrowser(authUrl.href);
-      console.log(opened ? "\n已尝试打开浏览器。若没弹出，请手动访问：" : "\n无法自动打开浏览器，请手动访问：");
+      console.log(
+        opened
+          ? "\n已尝试打开浏览器。若没弹出，请手动访问："
+          : "\n无法自动打开浏览器，请手动访问：",
+      );
       console.log(`\n  ${authUrl.href}\n`);
       console.log("等待授权中…（Ctrl+C 取消）\n");
     });
@@ -163,7 +188,12 @@ export async function exchangeCode({ clientId, clientSecret, code, location = "c
 }
 
 /** 用 refresh token 换新的 access token。 */
-export async function refreshAccessToken({ clientId, clientSecret, refreshToken, location = "com" }) {
+export async function refreshAccessToken({
+  clientId,
+  clientSecret,
+  refreshToken,
+  location = "com",
+}) {
   const region = resolveRegion(location);
   return tokenRequest(`${region.accounts}/oauth/v2/token`, {
     grant_type: "refresh_token",
@@ -192,7 +222,7 @@ async function tokenRequest(url, params) {
   if (!res.ok || parsed?.error) {
     throw new Error(
       `Token 请求失败 (HTTP ${res.status}): ${parsed?.error ?? "unknown"}` +
-      (parsed?.error_description ? ` — ${parsed.error_description}` : ""),
+        (parsed?.error_description ? ` — ${parsed.error_description}` : ""),
     );
   }
   return parsed;

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * Phase 0-6：账户身份、Alias、邮箱规模、IMAP 可用性、ID 类型
  *
@@ -11,11 +12,11 @@
  * 用法：node spikes/02-account.mjs
  */
 
-import { refreshAccessToken } from "./lib/oauth.mjs";
 import { apiRequest, assertApiOk } from "./lib/api.mjs";
 import { analyzeIdTypes } from "./lib/json-safe.mjs";
+import { refreshAccessToken } from "./lib/oauth.mjs";
 import { createRedactor } from "./lib/redact.mjs";
-import { loadSecrets, writeOut, requireConfig } from "./lib/store.mjs";
+import { loadSecrets, requireConfig, writeOut } from "./lib/store.mjs";
 
 const cfg = requireConfig(["clientId", "clientSecret", "refreshToken"]);
 const location = process.env.ZMAIL_LOCATION ?? loadSecrets().location ?? "com";
@@ -24,7 +25,7 @@ const findings = { step: "0-6", location };
 const redactor = createRedactor();
 redactor.addSecret(cfg.clientSecret).addSecret(cfg.refreshToken);
 
-const gb = (bytes) => (Number(bytes) / 1024 ** 3).toFixed(2) + " GB";
+const gb = (bytes) => `${(Number(bytes) / 1024 ** 3).toFixed(2)} GB`;
 
 try {
   console.log("\n=== Phase 0-6: 账户身份 / Alias / 规模 / IMAP / ID 类型 ===\n");
@@ -34,7 +35,10 @@ try {
   redactor.addSecret(accessToken);
 
   // ---- 账户列表 ----
-  const listRes = assertApiOk(await apiRequest("/api/accounts", { accessToken, location }), "获取账户列表");
+  const listRes = assertApiOk(
+    await apiRequest("/api/accounts", { accessToken, location }),
+    "获取账户列表",
+  );
   const accounts = listRes.parsed?.data ?? [];
   findings.accountCount = accounts.length;
   if (!accounts.length) throw new Error("账户列表为空，检查 scope 是否包含 ZohoMail.accounts.READ");
@@ -105,7 +109,10 @@ try {
   };
 
   // ---- 6. 文件夹（顺带确认只读 scope 是否够用）----
-  const folderRes = await apiRequest(`/api/accounts/${accountId}/folders`, { accessToken, location });
+  const folderRes = await apiRequest(`/api/accounts/${accountId}/folders`, {
+    accessToken,
+    location,
+  });
   findings.folders = folderRes.ok
     ? {
         ok: true,
@@ -125,10 +132,18 @@ try {
   // ---- 人类可读摘要 ----
   console.log("\n──────── 结论摘要 ────────");
   console.log(`账户数            : ${findings.accountCount}`);
-  console.log(`收件地址 / alias  : ${findings.identities.receiveAddressCount} 个，其中 alias ${findings.identities.aliasCount} 个`);
-  console.log(`发信身份          : ${findings.sendIdentities.count} 个，mode = ${findings.sendIdentities.modes.join(", ") || "-"}`);
-  console.log(`邮箱占用          : ${findings.storage.usedHuman ?? "?"} / ${findings.storage.allowedHuman ?? "?"}`);
-  console.log(`文件夹            : ${findings.folders.ok ? findings.folders.count + " 个" : "❌ 获取失败"}`);
+  console.log(
+    `收件地址 / alias  : ${findings.identities.receiveAddressCount} 个，其中 alias ${findings.identities.aliasCount} 个`,
+  );
+  console.log(
+    `发信身份          : ${findings.sendIdentities.count} 个，mode = ${findings.sendIdentities.modes.join(", ") || "-"}`,
+  );
+  console.log(
+    `邮箱占用          : ${findings.storage.usedHuman ?? "?"} / ${findings.storage.allowedHuman ?? "?"}`,
+  );
+  console.log(
+    `文件夹            : ${findings.folders.ok ? `${findings.folders.count} 个` : "❌ 获取失败"}`,
+  );
   console.log(`IMAP              : ${findings.imap.verdict}`);
   console.log(`ID 类型           : ${findings.idTypes.verdict}`);
   if (unsafe.length) console.log(`  超 2^53 字段    : ${unsafe.map((u) => u.key).join(", ")}`);
@@ -142,7 +157,9 @@ try {
   findings.error = err.message;
   console.error(`\n❌ ${err.message}`);
   if (/403|scope/i.test(err.message)) {
-    console.error("   scope 不足。确认授权时申请了 ZohoMail.accounts.READ / folders.READ / messages.READ。");
+    console.error(
+      "   scope 不足。确认授权时申请了 ZohoMail.accounts.READ / folders.READ / messages.READ。",
+    );
   }
 } finally {
   const p = writeOut("findings-0-6.json", JSON.stringify(findings, null, 2));
