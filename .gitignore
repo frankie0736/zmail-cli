@@ -1,4 +1,8 @@
-docs/
+# 内部设计文档不公开。
+# 注意：必须写成 docs/* 而不是 docs/ —— 目录整体被排除时，
+# 后面的 ! 放行规则不会生效。
+docs/*
+!docs/oauth-setup.md
 
 # deps / build
 node_modules/

@@ -41,18 +41,21 @@ file is equivalent to a system keychain.
 
 ## Status
 
-**Early development.** The read-only pipeline is being built. Not yet published
-to npm.
+**Read-only pipeline complete.** Not yet published
+to npm — see the release checklist below.
 
 | Phase | Scope | Status |
 |---|---|---|
-| 0 | Zoho API and OAuth validation | in progress |
+| 0 | Zoho API and OAuth validation | done |
 | 1 | Package skeleton, config, credentials, database, CI | done |
-| 2 | OAuth implementation | next |
-| 3 | Read-only mail sync + FTS5 search | planned |
-| 4 | Attachments and local maintenance | planned |
-| 5 | Agent skill and first npm release | planned |
+| 2 | OAuth implementation | done |
+| 3 | Read-only mail sync + FTS5 search | done |
+| 4 | Attachments, export, data maintenance | done |
+| 5 | Agent skill and first npm release | in progress |
 | 6–7 | Local drafts → Zoho drafts → two-phase send | planned |
+
+The read-only pipeline works end to end against a live mailbox. What remains
+before publishing is documentation polish and the release workflow.
 
 ## Install
 
@@ -74,11 +77,25 @@ zmail search "silicone tubing quotation" --json
 zmail thread get <thread-id> --json
 ```
 
+Everything after `sync` runs offline. Searching a synced mailbox makes no
+network call at all.
+
 Setting up a Zoho OAuth application takes about three minutes and is a one-time
-step. See [docs/oauth-setup.md](docs/oauth-setup.md) — API quota is counted per
-client, so having your own is an advantage.
+step — see **[docs/oauth-setup.md](docs/oauth-setup.md)**. API quota is counted
+per client, so having your own is an advantage rather than a chore.
 
 ## For agents
+
+The package ships an agent skill. Point your agent at it:
+
+```bash
+zmail skill path          # where SKILL.md and its references live
+cp -r "$(zmail skill path --json | jq -r .data.skillDir)" ~/.claude/skills/
+```
+
+JSON Schemas for the output envelope and search results are bundled under
+`schemas/`, so an agent can validate what it receives.
+
 
 Every command accepts `--json` and returns a stable envelope:
 

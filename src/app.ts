@@ -33,6 +33,7 @@ import {
 } from "./commands/data.js";
 import { runDoctor } from "./commands/doctor.js";
 import { runInit } from "./commands/init.js";
+import { runCompletion, runSkillPath, runSkillPrint } from "./commands/skill.js";
 import { runConfigPath, runConfigShow, runStatus, runVersion } from "./commands/status.js";
 import {
   runFolderList,
@@ -79,13 +80,13 @@ export function buildProgram(streams: Streams = {}): Command {
   program
     .name("zmail")
     .description("Local-first Zoho Mail mirror, search and safe-write CLI for AI agents")
-    .version(packageVersion(), "-V, --version", "输出版本号")
-    .option("--profile <name>", "使用指定的 profile")
-    .option("--data-dir <path>", "覆盖数据目录（优先于 ZMAIL_HOME）")
-    .option("--json", "输出 JSON，供 Agent 消费", false)
-    .option("-q, --quiet", "抑制 stderr 上的进度信息", false)
-    .option("--verbose", "输出更详细的诊断信息", false)
-    .option("--no-color", "禁用彩色输出")
+    .version(packageVersion(), "-V, --version", "print the version")
+    .option("--profile <name>", "use a specific profile")
+    .option("--data-dir <path>", "override the data directory (takes precedence over ZMAIL_HOME)")
+    .option("--json", "emit the stable JSON envelope for agents", false)
+    .option("-q, --quiet", "suppress progress output on stderr", false)
+    .option("--verbose", "emit more diagnostic detail", false)
+    .option("--no-color", "disable coloured output")
     // 抛异常而不是直接退出，交给顶层统一处理
     .exitOverride()
     .configureOutput({
@@ -101,9 +102,9 @@ export function buildProgram(streams: Streams = {}): Command {
     // 选项在 action 触发前已解析完成，直接读 opts()，不碰 process.argv ——
     // 那样会让注入 argv 的契约测试失效。
     if (program.opts().json) {
-      throw new ZmailError(ErrorCode.INVALID_ARGUMENT, "缺少子命令", {
+      throw new ZmailError(ErrorCode.INVALID_ARGUMENT, "missing subcommand", {
         details: { available: program.commands.map((c) => c.name()) },
-        hint: "运行 zmail --help 查看用法",
+        hint: "Run `zmail --help` for usage",
       });
     }
     program.outputHelp();
@@ -111,235 +112,262 @@ export function buildProgram(streams: Streams = {}): Command {
 
   program
     .command("init")
-    .description("初始化 ~/.zmail/ 并创建数据库")
+    .description("create ~/.zmail/ and initialise the database")
     .action(async () => {
       await runInit(makeContext(program, streams));
     });
 
   program
     .command("status")
-    .description("显示当前状态")
+    .description("show current status")
     .action(async () => {
       await runStatus(makeContext(program, streams));
     });
 
   program
     .command("doctor")
-    .description("诊断 Node、目录、权限、凭据后端和数据库")
+    .description("diagnose Node, directories, permissions, credential backend and database")
     .action(async () => {
       await runDoctor(makeContext(program, streams));
     });
 
   program
     .command("version")
-    .description("输出版本、schema 版本与索引规范化版本")
+    .description("print package, schema and index-normalizer versions")
     .action(async () => {
       await runVersion(makeContext(program, streams));
     });
 
-  const config = requireSubcommand(program.command("config").description("查看配置"));
+  const config = requireSubcommand(program.command("config").description("inspect configuration"));
   config
     .command("path")
-    .description("输出 config.json 的路径")
+    .description("print the path to config.json")
     .action(async () => {
       await runConfigPath(makeContext(program, streams));
     });
   config
     .command("show")
-    .description("输出当前配置内容")
+    .description("print the current configuration")
     .action(async () => {
       await runConfigShow(makeContext(program, streams));
     });
 
   program
     .command("sync")
-    .description("从 Zoho 同步邮件到本地")
-    .option("--full", "全量同步并对账（默认为快速同步）", false)
-    .option("--quick", "只扫描最新若干封（默认）", false)
-    .option("--folder <name>", "只同步指定文件夹")
+    .description("sync mail from Zoho into the local mirror")
+    .option("--full", "full sync with reconciliation (default is quick)", false)
+    .option("--quick", "scan only the most recent messages (default)", false)
+    .option("--folder <name>", "sync only the named folder")
     .action(async (opts) => {
       await runSync(makeContext(program, streams), opts);
     });
 
   program
     .command("search [terms...]")
-    .description("在本地镜像中全文搜索（中英文均可）")
-    .option("--query <text>", "关键词，安全转义后按 AND 组合")
-    .option("--phrase <text>", "精确短语")
-    .option("--any <text...>", "任一关键词命中即可")
-    .option("--exclude <text...>", "排除这些关键词")
-    .option("--raw-fts <expr>", "直接传 FTS5 表达式（中文多半查不到）")
-    .option("--from <address>", "发件人地址")
-    .option("--from-domain <domain>", "发件人域名")
-    .option("--to <address>", "收件人地址")
-    .option("--folder <name>", "限定文件夹")
-    .option("--after <date>", "该时间之后，ISO 8601")
-    .option("--before <date>", "该时间之前，ISO 8601")
-    .option("--unread", "只看未读", false)
-    .option("--has-attachment", "只看有附件的", false)
-    .option("--limit <n>", "返回条数", "20")
+    .description("full-text search the local mirror (English and Chinese)")
+    .option("--query <text>", "terms, escaped and combined with AND")
+    .option("--phrase <text>", "exact phrase")
+    .option("--any <text...>", "match any of these terms")
+    .option("--exclude <text...>", "exclude these terms")
+    .option("--raw-fts <expr>", "raw FTS5 expression; Chinese will usually match nothing")
+    .option("--from <address>", "sender address")
+    .option("--from-domain <domain>", "sender domain")
+    .option("--to <address>", "recipient address")
+    .option("--folder <name>", "restrict to a folder")
+    .option("--after <date>", "on or after this ISO 8601 date")
+    .option("--before <date>", "on or before this ISO 8601 date")
+    .option("--unread", "unread only", false)
+    .option("--has-attachment", "with attachments only", false)
+    .option("--limit <n>", "number of results", "20")
     .option("--sort <mode>", "relevance | newest | oldest", "relevance")
     .action(async (terms: string[], opts) => {
       await runSearch(makeContext(program, streams), terms?.join(" ") || undefined, opts);
     });
 
-  const message = requireSubcommand(program.command("message").description("读取单封邮件"));
+  const message = requireSubcommand(
+    program.command("message").description("read a single message"),
+  );
   message
     .command("get <messageId>")
-    .description("按 ID 读取邮件全文")
+    .description("read a message by ID")
     .action(async (messageId: string) => {
       await runMessageGet(makeContext(program, streams), messageId);
     });
 
-  const thread = requireSubcommand(program.command("thread").description("读取线程"));
+  const thread = requireSubcommand(program.command("thread").description("read a thread"));
   thread
     .command("get <threadId>")
-    .description("按 ID 读取整个线程")
+    .description("read an entire thread by ID")
     .action(async (threadId: string) => {
       await runThreadGet(makeContext(program, streams), threadId);
     });
 
-  const folder = requireSubcommand(program.command("folder").description("文件夹"));
+  const folder = requireSubcommand(program.command("folder").description("folders"));
   folder
     .command("list")
-    .description("列出文件夹及其同步状态")
+    .description("list folders and whether they are synced")
     .action(async () => {
       await runFolderList(makeContext(program, streams));
     });
 
   const attachment = requireSubcommand(
-    program.command("attachment").description("附件（元数据随同步入库，内容按需下载）"),
+    program
+      .command("attachment")
+      .description("attachments (metadata syncs; content downloads on demand)"),
   );
   attachment
     .command("list <messageId>")
-    .description("列出某封邮件的附件")
+    .description("list a message's attachments")
     .action(async (messageId: string) => {
       await runAttachmentList(makeContext(program, streams), messageId);
     });
   attachment
     .command("download <attachmentId>")
-    .description("下载附件内容到本地内容寻址存储")
-    .option("--out <dir>", "同时导出到该目录（文件名会被消毒）")
+    .description("download attachment content into content-addressed storage")
+    .option("--out <dir>", "also export to this directory (filename is sanitized)")
     .action(async (attachmentId: string, opts) => {
       await runAttachmentDownload(makeContext(program, streams), attachmentId, opts);
     });
   attachment
     .command("path <attachmentId>")
-    .description("输出附件在本地的绝对路径")
+    .description("print the local absolute path of an attachment")
     .action(async (attachmentId: string) => {
       await runAttachmentPath(makeContext(program, streams), attachmentId);
     });
   attachment
     .command("prune")
-    .description("按配额 LRU 回收附件内容（元数据保留）")
-    .option("--dry-run", "只显示将要回收的内容", false)
+    .description("evict attachment content by LRU to stay within quota (metadata kept)")
+    .option("--dry-run", "show what would be evicted without doing it", false)
     .action(async (opts) => {
       await runAttachmentPrune(makeContext(program, streams), opts);
     });
 
-  const data = requireSubcommand(program.command("data").description("本地数据维护"));
+  const data = requireSubcommand(program.command("data").description("local data maintenance"));
   data
     .command("rebuild-index")
-    .description("从 messages 重建全文索引")
+    .description("rebuild the full-text index from messages")
     .action(async () => {
       await runRebuildIndex(makeContext(program, streams));
     });
   data
     .command("stats")
-    .description("分项显示磁盘占用")
+    .description("report disk usage broken down by component")
     .action(async () => {
       await runDataStats(makeContext(program, streams));
     });
   data
     .command("verify")
-    .description("完整性检查：数据库、FTS 索引一致性、附件文件是否还在")
+    .description("integrity check: database, FTS index consistency, attachment files")
     .action(async () => {
       await runDataVerify(makeContext(program, streams));
     });
   data
     .command("backup")
-    .description("备份数据库与配置（不含附件与凭据）")
-    .option("--out <dir>", "备份目录，默认 ~/.zmail/backups/")
+    .description("back up database and config (excludes attachments and credentials)")
+    .option("--out <dir>", "backup directory; defaults to ~/.zmail/backups/")
     .action(async (opts) => {
       await runDataBackup(makeContext(program, streams), opts);
     });
   data
     .command("prune")
-    .description("清理可再生数据以回收空间")
-    .option("--raw-json", "清理原始 JSON", false)
-    .option("--body-html", "清理 HTML 正文（保留纯文本）", false)
-    .option("--remote-deleted", "删除已确认远程删除的邮件", false)
-    .option("--older-than <days>", "只清理早于该天数的（如 30d）", "30d")
+    .description("prune regenerable data to reclaim space")
+    .option("--raw-json", "drop stored raw JSON", false)
+    .option("--body-html", "drop HTML bodies (plain text is kept)", false)
+    .option("--remote-deleted", "delete messages confirmed gone from the server", false)
+    .option("--older-than <days>", "only prune items older than this (e.g. 30d)", "30d")
     .action(async (opts) => {
       await runDataPrune(makeContext(program, streams), opts);
     });
   data
     .command("reset")
-    .description("清除本地数据库与附件，不影响 Zoho 远程邮箱")
-    .option("--local-only", "必须显式指定，以确认只影响本地", false)
-    .option("--yes", "跳过交互确认", false)
+    .description("clear the local database and attachments; the Zoho mailbox is untouched")
+    .option("--local-only", "required, to make 'local only' explicit on the command line", false)
+    .option("--yes", "skip the interactive confirmation", false)
     .action(async (opts) => {
       await runDataReset(makeContext(program, streams), opts);
     });
   data
     .command("purge")
-    .description("删除整个数据目录")
-    .option("--yes", "跳过交互确认", false)
+    .description("delete the entire data directory")
+    .option("--yes", "skip the interactive confirmation", false)
     .action(async (opts) => {
       await runDataPurge(makeContext(program, streams), opts);
     });
 
   program
     .command("export")
-    .description("导出邮件为标准格式（你的数据不被锁定）")
+    .description("export mail to standard formats — your data is not locked in")
     .requiredOption("--format <fmt>", "eml | mbox | jsonl", "jsonl")
-    .requiredOption("--out <path>", "eml 需要目录，mbox/jsonl 需要文件路径")
-    .option("--folder <name>", "限定文件夹")
+    .requiredOption("--out <path>", "directory for eml; file path for mbox and jsonl")
+    .option("--folder <name>", "restrict to a folder")
     .option("--after <date>", "该时间之后")
     .option("--before <date>", "该时间之前")
-    .option("--limit <n>", "最多导出多少封")
+    .option("--limit <n>", "maximum number of messages to export")
     .action(async (opts) => {
       await runExport(makeContext(program, streams), opts);
     });
 
-  const auth = requireSubcommand(program.command("auth").description("Zoho 授权管理"));
+  const skill = requireSubcommand(
+    program.command("skill").description("agent skill files bundled with this package"),
+  );
+  skill
+    .command("path")
+    .description("print where SKILL.md and its references live")
+    .action(async () => {
+      await runSkillPath(makeContext(program, streams));
+    });
+  skill
+    .command("print")
+    .description("print SKILL.md to stdout")
+    .action(async () => {
+      await runSkillPrint(makeContext(program, streams));
+    });
+
+  program
+    .command("completion <shell>")
+    .description("emit shell completion for bash, zsh or fish")
+    .action(async (shell: string) => {
+      await runCompletion(makeContext(program, streams), shell);
+    });
+
+  const auth = requireSubcommand(program.command("auth").description("manage Zoho authorization"));
   auth
     .command("setup")
-    .description("保存 Zoho OAuth 客户端凭据")
-    .option("--client-id <id>", "Zoho OAuth Client ID")
-    .option("--client-secret <secret>", "Zoho OAuth Client Secret")
-    .option("--email <address>", "Zoho 邮箱地址")
-    .option("--location <dc>", "数据中心（com/eu/in/com.cn/com.au/jp）", "com")
+    .description("store Zoho OAuth client credentials")
+    .option("--client-id <id>", "Zoho OAuth client ID")
+    .option("--client-secret <secret>", "Zoho OAuth client secret")
+    .option("--email <address>", "Zoho email address")
+    .option("--location <dc>", "data centre (com/eu/in/com.cn/com.au/jp)", "com")
     .action(async (opts) => {
       await runAuthSetup(makeContext(program, streams), opts);
     });
   auth
     .command("login")
-    .description("在浏览器中完成授权并保存 refresh token")
+    .description("authorize in a browser and store the refresh token")
     .action(async () => {
       await runAuthLogin(makeContext(program, streams));
     });
   auth
     .command("status")
-    .description("显示当前授权状态")
+    .description("show authorization status")
     .action(async () => {
       await runAuthStatus(makeContext(program, streams));
     });
   auth
     .command("refresh")
-    .description("刷新 access token（验证凭据可用）")
+    .description("refresh the access token to verify credentials work")
     .action(async () => {
       await runAuthRefresh(makeContext(program, streams));
     });
   auth
     .command("revoke")
-    .description("在 Zoho 远程撤销授权并删除本机 refresh token")
+    .description("revoke remotely at Zoho and delete the local refresh token")
     .action(async () => {
       await runAuthRevoke(makeContext(program, streams));
     });
   auth
     .command("remove")
-    .description("只删除本机凭据，不撤销远程授权")
+    .description("delete local credentials only; the remote grant stays active")
     .action(async () => {
       await runAuthRemove(makeContext(program, streams));
     });
@@ -357,9 +385,9 @@ export function buildProgram(streams: Streams = {}): Command {
 function requireSubcommand(cmd: Command): Command {
   cmd.action(() => {
     const available = cmd.commands.map((c) => c.name());
-    throw new ZmailError(ErrorCode.INVALID_ARGUMENT, `"${cmd.name()}" 需要一个子命令`, {
+    throw new ZmailError(ErrorCode.INVALID_ARGUMENT, `"${cmd.name()}" requires a subcommand`, {
       details: { command: cmd.name(), available },
-      hint: `可用子命令: ${available.join(", ")}`,
+      hint: `Available subcommands: ${available.join(", ")}`,
     });
   });
   return cmd;
@@ -417,7 +445,7 @@ export async function run(options: RunOptions): Promise<ExitCodeValue> {
 
       const zErr = new ZmailError(ErrorCode.INVALID_ARGUMENT, cleanCommanderMessage(err), {
         details: { commanderCode: err.code },
-        hint: "运行 zmail --help 查看用法",
+        hint: "Run `zmail --help` for usage",
       });
       fallbackOut.emitError(zErr);
       return zErr.exitCode;

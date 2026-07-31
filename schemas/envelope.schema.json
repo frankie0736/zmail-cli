@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/frankie0736/zmail-cli/schemas/envelope.schema.json",
+  "title": "zmail JSON envelope",
+  "description": "Every zmail command invoked with --json emits exactly one document matching this schema on stdout.",
+  "oneOf": [{ "$ref": "#/$defs/success" }, { "$ref": "#/$defs/error" }],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": ["ok", "data", "meta"],
+      "properties": {
+        "ok": { "const": true },
+        "data": { "description": "Command-specific payload." },
+        "meta": {
+          "type": "object",
+          "properties": {
+            "profile": { "type": "string" },
+            "source": {
+              "enum": ["local", "remote", "none"],
+              "description": "Whether the answer came from the local mirror or a live call."
+            },
+            "syncedAt": { "type": ["string", "null"], "format": "date-time" },
+            "nextCursor": { "type": ["string", "null"] }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "required": ["ok", "error"],
+      "properties": {
+        "ok": { "const": false },
+        "error": {
+          "type": "object",
+          "required": ["code", "message", "retryable", "details"],
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "Stable machine-readable code. Branch on this, never on message.",
+              "enum": [
+                "INTERNAL", "INVALID_ARGUMENT", "NOT_FOUND", "NOT_INITIALIZED",
+                "ALREADY_INITIALIZED", "AUTH_REQUIRED", "AUTH_PASSPHRASE_REQUIRED",
+                "SECRET_BACKEND_UNAVAILABLE", "SECRET_DECRYPT_FAILED", "SECRET_NOT_FOUND",
+                "NETWORK_ERROR", "ZOHO_API_ERROR", "RATE_LIMITED", "INSUFFICIENT_SCOPE",
+                "DATABASE_ERROR", "MIGRATION_FAILED", "SCHEMA_TOO_NEW", "SYNC_LOCKED",
+                "APPROVAL_REQUIRED", "INCOMPLETE_DATA", "CONFIG_INVALID", "PROFILE_NOT_FOUND"
+              ]
+            },
+            "message": { "type": "string", "description": "Human prose. Not part of the contract." },
+            "retryable": { "type": "boolean" },
+            "details": { "type": "object", "additionalProperties": true }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

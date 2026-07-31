@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/frankie0736/zmail-cli/schemas/search-result.schema.json",
+  "title": "zmail search result",
+  "description": "The data payload of `zmail search --json`.",
+  "type": "object",
+  "required": ["hits", "total", "returned"],
+  "properties": {
+    "total": { "type": "integer", "description": "Total matches, not just those returned." },
+    "returned": { "type": "integer" },
+    "hits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["messageId", "subject", "fromAddress", "receivedAt"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "description": "Opaque Zoho ID. Always a string — these exceed 2^53 and must never be converted to a number."
+          },
+          "threadId": { "type": ["string", "null"] },
+          "folder": { "type": ["string", "null"] },
+          "subject": { "type": ["string", "null"] },
+          "fromName": { "type": ["string", "null"] },
+          "fromAddress": { "type": ["string", "null"] },
+          "receivedAt": { "type": ["string", "null"], "format": "date-time" },
+          "hasAttachments": { "type": "boolean" },
+          "isRead": { "type": "boolean" },
+          "isRemoteDeleted": { "type": "boolean" },
+          "snippet": {
+            "type": ["string", "null"],
+            "description": "Generated from the plain-text body; safe to display."
+          },
+          "score": {
+            "type": ["number", "null"],
+            "description": "bm25 relevance. Lower is better. Null when no full-text term was given."
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

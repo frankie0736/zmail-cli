@@ -93,9 +93,9 @@ function recipientsOf(db: SqliteDatabase, profileId: string, messageId: string) 
 function headerValue(raw: string | null): string {
   if (!raw) return "";
   const text = raw.replace(/[\r\n]+/g, " ").trim();
-  // 非 ASCII 必须走 encoded-word，否则某些客户端会显示乱码
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: 检测需要编码的字符
-  if (/[^ -~]/.test(text)) {
+  // 非 ASCII 必须走 RFC 2047 encoded-word，否则中文主题在多数客户端里是乱码。
+  // 范围写成 \u0020-\u007e 而非字面量，可打印 ASCII 之外的一律编码。
+  if (/[^\u0020-\u007e]/.test(text)) {
     return `=?UTF-8?B?${Buffer.from(text, "utf8").toString("base64")}?=`;
   }
   return text;
