@@ -24,19 +24,38 @@
 
 4. 创建后拿到 **Client ID** 和 **Client Secret**。
 
-5. 写进 `spikes/.secrets.json`（该文件已 gitignore）：
+5. 把凭据写进仓库根的 `.env`（已 gitignore）：
 
-   ```json
-   {
-     "clientId": "1000.XXXXXXXXXXXXXXXXXXXXXXXX",
-     "clientSecret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-     "location": "com"
-   }
+   ```bash
+   ZMAIL_CLIENT_ID=1000.XXXXXXXXXXXXXXXXXXXXXXXX
+   ZMAIL_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ZMAIL_LOCATION=com
    ```
 
-   也可以用环境变量代替：`ZMAIL_CLIENT_ID` / `ZMAIL_CLIENT_SECRET` / `ZMAIL_LOCATION`。
+   ```bash
+   chmod 600 .env      # 里面有 client secret，别让它世界可读
+   ```
 
    `location` 取值：`com`（国际）/ `eu` / `in` / `com.cn` / `com.au` / `jp`。
+
+### 配置来源与优先级
+
+脚本会自动加载 `.env`，无需 `--env-file` 或任何额外工具。查找顺序：
+
+| 优先级 | 位置 | 说明 |
+|---|---|---|
+| 1 | shell 环境变量 | 临时覆盖用，如 `ZMAIL_LOCATION=eu node spikes/01-oauth.mjs` |
+| 2 | `spikes/.env` | 靠近脚本，视为更具体的配置 |
+| 3 | `<repo>/.env` | **推荐放这里** |
+| 4 | `spikes/.secrets.json` | 脚本自己写入的产物（如 refresh token） |
+
+高优先级的来源不会被低优先级覆盖。
+
+**别在多处放同一份凭据** —— 轮换了一个忘了另一个，排查起来毫无头绪。
+检测到多个 `.env` 时脚本会告警并告诉你哪个生效。
+
+`01-oauth.mjs` 拿到 refresh token 后会自动写进 `spikes/.secrets.json`，
+不需要你手工搬运。
 
 ---
 
