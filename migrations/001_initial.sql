@@ -24,8 +24,12 @@ CREATE TABLE accounts (
   primary_email TEXT,
   display_name TEXT,
   -- 邮箱容量，用于校准存储预算与配额推算（§25 Phase 0-6）
-  used_storage_bytes INTEGER,
-  allowed_storage_bytes INTEGER,
+  -- 邮箱容量。⚠️ Zoho 的 usedStorage / allowedStorage 单位是 **KB**，不是字节。
+  -- 佐证：planStorage=10（GB）时 allowedStorage=10485760，10485760 KB 正好 10 GB。
+  -- 当成字节会把 10 GB 的邮箱报成 10 MB（Phase 0-6 实际踩过这个坑）。
+  used_storage_kb INTEGER,
+  allowed_storage_kb INTEGER,
+  plan_storage_gb INTEGER,
   -- IMAP 可用性，决定是否值得走 IMAP 批量同步（§25 Phase 0-4）
   imap_access_enabled INTEGER,
   imap_blocked INTEGER,

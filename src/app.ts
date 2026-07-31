@@ -8,6 +8,14 @@
  */
 
 import { Command, CommanderError } from "commander";
+import {
+  runAuthLogin,
+  runAuthRefresh,
+  runAuthRemove,
+  runAuthRevoke,
+  runAuthSetup,
+  runAuthStatus,
+} from "./commands/auth.js";
 import { runDoctor } from "./commands/doctor.js";
 import { runInit } from "./commands/init.js";
 import { runConfigPath, runConfigShow, runStatus, runVersion } from "./commands/status.js";
@@ -118,6 +126,48 @@ export function buildProgram(streams: Streams = {}): Command {
     .description("输出当前配置内容")
     .action(async () => {
       await runConfigShow(makeContext(program, streams));
+    });
+
+  const auth = requireSubcommand(program.command("auth").description("Zoho 授权管理"));
+  auth
+    .command("setup")
+    .description("保存 Zoho OAuth 客户端凭据")
+    .option("--client-id <id>", "Zoho OAuth Client ID")
+    .option("--client-secret <secret>", "Zoho OAuth Client Secret")
+    .option("--email <address>", "Zoho 邮箱地址")
+    .option("--location <dc>", "数据中心（com/eu/in/com.cn/com.au/jp）", "com")
+    .action(async (opts) => {
+      await runAuthSetup(makeContext(program, streams), opts);
+    });
+  auth
+    .command("login")
+    .description("在浏览器中完成授权并保存 refresh token")
+    .action(async () => {
+      await runAuthLogin(makeContext(program, streams));
+    });
+  auth
+    .command("status")
+    .description("显示当前授权状态")
+    .action(async () => {
+      await runAuthStatus(makeContext(program, streams));
+    });
+  auth
+    .command("refresh")
+    .description("刷新 access token（验证凭据可用）")
+    .action(async () => {
+      await runAuthRefresh(makeContext(program, streams));
+    });
+  auth
+    .command("revoke")
+    .description("在 Zoho 远程撤销授权并删除本机 refresh token")
+    .action(async () => {
+      await runAuthRevoke(makeContext(program, streams));
+    });
+  auth
+    .command("remove")
+    .description("只删除本机凭据，不撤销远程授权")
+    .action(async () => {
+      await runAuthRemove(makeContext(program, streams));
     });
 
   return program;
