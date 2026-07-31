@@ -1,1 +1,18 @@
 docs/
+
+# deps / build
+node_modules/
+dist/
+*.tgz
+
+# spike 产物：含真实令牌与未脱敏邮件数据，绝不入库
+spikes/.secrets.json
+spikes/out/
+
+# 本地数据目录（若在仓库内测试）
+.zmail/
+.zmail-*/
+
+# 杂项
+.DS_Store
+*.log
