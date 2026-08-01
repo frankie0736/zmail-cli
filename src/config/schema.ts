@@ -45,7 +45,12 @@ export const profileSchema = z.object({
   accountId: z.string().nullable().default(null),
   accountsBaseUrl: z.url(),
   mailApiBaseUrl: z.url(),
-  /** SecretStore 中该 profile 凭据的 service 名，不含凭据本身。 */
+  /**
+   * SecretStore 中该 profile 凭据的 service 名，不含凭据本身。
+   *
+   * 用项目名而不是维护者的个人标识：用户在「钥匙串访问」里看到的
+   * 应该是他们装的这个工具，而不是某个陌生人的名字。
+   */
   keychainService: z.string().default("zmail-cli"),
   /** 授权时实际获得的 scope，用于在调用前预判权限不足。 */
   grantedScopes: z.array(z.string()).default([]),
