@@ -27,7 +27,7 @@
     "fts5"
   ],
   "bin": {
-    "zmail": "./dist/cli.js"
+    "zmail": "dist/cli.js"
   },
   "files": [
     "dist",
