@@ -68,7 +68,17 @@ function parsePackJson(raw) {
   } catch (err) {
     throw new Error(`npm pack --json 输出无法解析: ${err.message}\n${raw.slice(0, 400)}`);
   }
-  const info = Array.isArray(parsed) ? parsed[0] : parsed;
+  // 已知的三种形态：
+  //   npm 10  → [{ filename, files }]
+  //   npm 11  → { filename, files }
+  //   npm 12  → { "<pkg-name>": { filename, files } }   ← 以包名为键
+  let info = Array.isArray(parsed) ? parsed[0] : parsed;
+  if (info && typeof info.filename !== "string") {
+    const nested = Object.values(info).find(
+      (v) => v && typeof v === "object" && typeof v.filename === "string",
+    );
+    if (nested) info = nested;
+  }
   if (!info || typeof info.filename !== "string") {
     throw new Error(
       `npm pack --json 的结构不符合预期（npm ${process.version} 环境）。得到:\n` +
