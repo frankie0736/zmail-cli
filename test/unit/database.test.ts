@@ -95,7 +95,10 @@ describe("schema 行为", () => {
 
   const seed = () => {
     const now = Date.now();
-    db.prepare("INSERT INTO profiles VALUES ('primary','owner@example.com','com',?,?)").run(now, now);
+    db.prepare("INSERT INTO profiles VALUES ('primary','owner@example.com','com',?,?)").run(
+      now,
+      now,
+    );
     db.prepare(
       `INSERT INTO account_identities(profile_id,account_id,address,is_receive,is_alias,first_synced_at,last_synced_at)
        VALUES ('primary','ACC','sales@example.com',1,1,?,?)`,
