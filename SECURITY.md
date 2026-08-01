@@ -83,11 +83,17 @@ reporting.
 
 ## Supply Chain
 
-- Published exclusively from CI via npm Trusted Publishing (OIDC). No long-lived
-  npm tokens exist in the repository or in GitHub Secrets.
-- Every release carries [npm provenance](https://docs.npmjs.com/generating-provenance-statements),
+- Published from CI via npm Trusted Publishing (OIDC). No long-lived npm tokens
+  exist in the repository or in GitHub Secrets.
+- Releases carry [npm provenance](https://docs.npmjs.com/generating-provenance-statements),
   so you can verify the published tarball was built from a specific commit in
-  this repository.
+  this repository. Verify it yourself with `npm audit signatures`.
+
+  **Exception: `0.1.0` was published manually and has no provenance.** npm can
+  only attest to builds that happen on a supported CI runner, and trusted
+  publishing has to be configured on a package that already exists — so the
+  first release cannot have it. Every version after `0.1.0` is published by CI
+  and attested. If provenance matters to you, install `0.1.1` or later.
 - **No `postinstall` or `preinstall` scripts.** All initialization happens when
   you first run `zmail init`.
 - Runtime dependencies are kept deliberately minimal. Each one is attack surface.

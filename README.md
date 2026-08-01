@@ -41,8 +41,7 @@ file is equivalent to a system keychain.
 
 ## Status
 
-**Read-only pipeline complete.** Not yet published
-to npm — see the release checklist below.
+**Read-only pipeline complete.** First release published to npm.
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -60,7 +59,7 @@ before publishing is documentation polish and the release workflow.
 ## Install
 
 ```bash
-npm install -g zmail-cli    # not yet published
+npm install -g zmail-cli
 ```
 
 Requires Node.js >= 22 on macOS, Linux or Windows.

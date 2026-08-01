@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 While on `0.x`, a minor bump may contain breaking changes; those are always
 called out explicitly.
 
-## [Unreleased]
+## [0.1.0] — 2026-08-01
 
 ### Added
 
@@ -43,4 +43,9 @@ called out explicitly.
   transfer fails rather than being recorded as a successful download.
 - Logs and `zmail doctor` output are redacted so they can be shared publicly.
 
-[Unreleased]: https://github.com/frankie0736/zmail-cli/commits/main
+### Notes
+
+`0.1.0` was published manually and therefore carries no npm provenance; see
+SECURITY.md. Subsequent releases are published by CI and attested.
+
+[0.1.0]: https://github.com/frankie0736/zmail-cli/releases/tag/v0.1.0
