@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 While on `0.x`, a minor bump may contain breaking changes; those are always
 called out explicitly.
 
+## [0.1.1] — 2026-08-01
+
+First release published by CI, and therefore the first with npm provenance —
+verify it with `npm audit signatures`.
+
+### Fixed
+
+- CI had never executed a single test. `pnpm/action-setup` resolves its version
+  from `packageManager` in package.json, which was missing, so every run since
+  the repository was created failed at the first step.
+- Export-path tests asserted POSIX separators and failed on Windows. The code
+  was correct; only the assertions were platform-bound.
+- The global-install smoke test parsed `npm pack --json` assuming npm 10's
+  array shape, while CI installs npm@latest. It also could not spawn `npm.cmd`
+  on Windows, which Node refuses without a shell since CVE-2024-27980.
+- `bin` path normalized so npm stops silently rewriting the manifest on publish.
+
+### Changed
+
+- The Keychain service name no longer contains the maintainer's personal
+  identifier. It is now `zmail-cli`. **Credentials stored by 0.1.0 will not be
+  found** — re-run `zmail auth setup` and `zmail auth login`, or set
+  `keychainService` back in config.json.
+- The release workflow verifies the tag matches package.json before building,
+  rather than after the full test and smoke run.
+
 ## [0.1.0] — 2026-08-01
 
 ### Added
@@ -48,4 +74,5 @@ called out explicitly.
 `0.1.0` was published manually and therefore carries no npm provenance; see
 SECURITY.md. Subsequent releases are published by CI and attested.
 
+[0.1.1]: https://github.com/frankie0736/zmail-cli/releases/tag/v0.1.1
 [0.1.0]: https://github.com/frankie0736/zmail-cli/releases/tag/v0.1.0

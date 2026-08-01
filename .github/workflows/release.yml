@@ -29,15 +29,6 @@ jobs:
       # npm >= 11.5.1 才支持 Trusted Publishing
       - run: npm install -g npm@latest
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm test
-      - run: pnpm build
-
-      # 发布前最后一道闸：全局安装真的能用吗
-      - run: pnpm smoke
-
       - name: Verify tag matches package version
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -47,6 +38,15 @@ jobs:
             echo "::error::tag v$TAG 与 package.json 的 $PKG 不一致"
             exit 1
           fi
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+      # 发布前最后一道闸：全局安装真的能用吗
+      - run: pnpm smoke
 
       - name: Inspect package contents
         run: npm pack --dry-run
