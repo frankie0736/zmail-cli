@@ -12,7 +12,7 @@
  *   - 卸载后数据仍然存在
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,8 +25,27 @@ const check = (name, ok, extra = "") => {
   if (!ok) failures++;
 };
 
-const sh = (cmd, args, opts = {}) =>
-  execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
+const isWindows = process.platform === "win32";
+
+/**
+ * 跨平台执行命令。
+ *
+ * Windows 上 `npm` 与全局安装的 bin 都是 `.cmd` 包装脚本。自
+ * CVE-2024-27980 起，Node 拒绝在没有 shell 的情况下 spawn `.cmd`/`.bat`，
+ * 所以 `execFileSync("npm", ...)` 在 Windows 上必然 ENOENT —— 这正是
+ * 冒烟测试在 Windows 矩阵上失败的原因。
+ *
+ * 走 shell 会重新引入注入面，因此每个参数都显式加引号。这里的参数全部
+ * 由本脚本生成（mkdtemp 路径、npm pack 产出的 tarball 名），但依赖
+ * 「输入恰好安全」而不是「显式转义」，是下一个人改坏它的邀请函。
+ */
+const sh = (cmd, args, opts = {}) => {
+  const base = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts };
+  if (!isWindows) return execFileSync(cmd, args, base);
+
+  const quote = (a) => `"${String(a).replace(/(["\\])/g, "\\$1")}"`;
+  return execSync([quote(cmd), ...args.map(quote)].join(" "), { ...base, shell: undefined });
+};
 
 /**
  * 解析 `npm pack --json`。
@@ -114,8 +133,8 @@ try {
   const env = { ...process.env, npm_config_prefix: prefix, HOME: fakeHome, USERPROFILE: fakeHome };
   sh("npm", ["install", "-g", tarball], { env, cwd: workDir });
 
-  const binName = process.platform === "win32" ? "zmail.cmd" : "zmail";
-  const binPath = join(prefix, process.platform === "win32" ? "" : "bin", binName);
+  // Windows 的全局 bin 直接放在 prefix 下且是 .cmd；POSIX 放在 prefix/bin
+  const binPath = isWindows ? join(prefix, "zmail.cmd") : join(prefix, "bin", "zmail");
   check("zmail 已安装到 prefix", existsSync(binPath), binPath);
 
   const zmail = (...args) => sh(binPath, args, { env, cwd: workDir });
