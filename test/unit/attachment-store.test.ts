@@ -80,32 +80,35 @@ describe("safeFilename：恶意文件名（§15.4 要求的 fixture）", () => {
 });
 
 describe("resolveExportPath：最后一道防线", () => {
-  it("越界路径被拒绝而不是静默写出去", () => {
-    // 即使 safeFilename 因某种未预料输入漏掉了什么，这里也要拦住
-    expect(() => resolveExportPath("/tmp/out", "../../etc/passwd")).not.toThrow();
-    // 消毒后应落在目录内
-    expect(resolveExportPath("/tmp/out", "../../etc/passwd").startsWith(`/tmp/out${sep}`)).toBe(
-      true,
-    );
+  // 用 join 构造而不是写死 "/tmp/out" —— Windows 上 resolve("/tmp/out")
+  // 得到 "D:\\tmp\\out"，硬编码 POSIX 路径的断言会在 Windows 上假失败，
+  // 掩盖真正要验证的东西：结果是否落在目录之内。
+  const OUT = join(tmpdir(), "zmail-export-test");
+
+  it("越界路径被消毒后仍落在输出目录内", () => {
+    const p = resolveExportPath(OUT, "../../etc/passwd");
+    expect(p.startsWith(OUT + sep)).toBe(true);
+    expect(p).not.toContain("..");
   });
 
-  it("结果始终位于输出目录之内", () => {
-    for (const evil of ["../x", "../../y", "a/../../z", "/abs/path"]) {
-      const p = resolveExportPath("/tmp/out", evil);
-      expect(p.startsWith(`/tmp/out${sep}`)).toBe(true);
+  it("各种穿越构造都无法逃出输出目录", () => {
+    for (const evil of ["../x", "../../y", "a/../../z", "/abs/path", "..\\..\\win"]) {
+      const p = resolveExportPath(OUT, evil);
+      expect(p.startsWith(OUT + sep)).toBe(true);
     }
   });
 });
 
 describe("uniqueExportPath：不静默覆盖", () => {
+  const OUT = join(tmpdir(), "zmail-export-test");
+
   it("同名时追加序号", () => {
-    const existing = new Set(["/tmp/out/a.pdf", "/tmp/out/a (1).pdf"]);
-    const p = uniqueExportPath("/tmp/out", "a.pdf", (x) => existing.has(x));
-    expect(p).toBe("/tmp/out/a (2).pdf");
+    const taken = new Set([join(OUT, "a.pdf"), join(OUT, "a (1).pdf")]);
+    expect(uniqueExportPath(OUT, "a.pdf", (x) => taken.has(x))).toBe(join(OUT, "a (2).pdf"));
   });
 
   it("不存在时直接用原名", () => {
-    expect(uniqueExportPath("/tmp/out", "a.pdf", () => false)).toBe("/tmp/out/a.pdf");
+    expect(uniqueExportPath(OUT, "a.pdf", () => false)).toBe(join(OUT, "a.pdf"));
   });
 });
 

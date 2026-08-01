@@ -28,6 +28,38 @@ const check = (name, ok, extra = "") => {
 const sh = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
 
+/**
+ * 解析 `npm pack --json`。
+ *
+ * 输出形态随 npm 大版本变化：旧版返回数组，新版可能返回单个对象，
+ * 而且有些版本会在 JSON 前后混入通知行。CI 会 `npm install -g npm@latest`，
+ * 所以这里跑的 npm 版本几乎必然和本机不同 —— 写死一种形态就会在 CI 上炸，
+ * 而且报出来的是 "Cannot read properties of undefined" 这种毫无线索的错误。
+ */
+function parsePackJson(raw) {
+  // 掐掉 JSON 之外的内容：从第一个 [ 或 { 到最后一个 ] 或 }
+  const start = raw.search(/[[{]/);
+  const end = Math.max(raw.lastIndexOf("]"), raw.lastIndexOf("}"));
+  if (start < 0 || end < start) {
+    throw new Error(`npm pack --json 没有输出 JSON。原始输出:\n${raw.slice(0, 400)}`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw.slice(start, end + 1));
+  } catch (err) {
+    throw new Error(`npm pack --json 输出无法解析: ${err.message}\n${raw.slice(0, 400)}`);
+  }
+  const info = Array.isArray(parsed) ? parsed[0] : parsed;
+  if (!info || typeof info.filename !== "string") {
+    throw new Error(
+      `npm pack --json 的结构不符合预期（npm ${process.version} 环境）。得到:\n` +
+        JSON.stringify(parsed).slice(0, 400),
+    );
+  }
+  if (!Array.isArray(info.files)) info.files = [];
+  return info;
+}
+
 const workDir = mkdtempSync(join(tmpdir(), "zmail-smoke-"));
 const prefix = join(workDir, "npm-prefix");
 const fakeHome = join(workDir, "home");
@@ -41,7 +73,7 @@ try {
   sh("npm", ["run", "build"], { cwd: repoRoot });
 
   const packOut = sh("npm", ["pack", "--json"], { cwd: repoRoot });
-  const packInfo = JSON.parse(packOut)[0];
+  const packInfo = parsePackJson(packOut);
   const tarball = join(repoRoot, packInfo.filename);
   check("npm pack 成功", existsSync(tarball), packInfo.filename);
 
