@@ -38,18 +38,21 @@ describe("parseAddressList", () => {
   });
 
   it("绝不把实体残片带进地址", () => {
-    for (const input of ["&quot;X&quot; &lt;a@b.com&gt;", "&lt;a@b.com&gt;", "a@b.com&gt;"]) {
+    for (const input of [
+      "&quot;X&quot; &lt;a@b.example&gt;",
+      "&lt;a@b.example&gt;",
+      "a@b.example&gt;",
+    ]) {
       const [first] = parseAddressList(input);
-      expect(first?.address).toBe("a@b.com");
+      expect(first?.address).toBe("a@b.example");
       expect(first?.address).not.toMatch(/&|;|<|>/);
     }
   });
 
   it("引号内的逗号不被当作分隔符", () => {
-    expect(parseAddressList('"Doe, John" <john@x.com>, jane@y.com').map((r) => r.address)).toEqual([
-      "john@x.com",
-      "jane@y.com",
-    ]);
+    expect(
+      parseAddressList('"Doe, John" <john@x.example>, jane@y.example').map((r) => r.address),
+    ).toEqual(["john@x.example", "jane@y.example"]);
   });
 
   it("地址统一小写，便于与身份表比对", () => {
@@ -117,7 +120,7 @@ describe("matchIdentity", () => {
 
   it("没有命中时返回 null", () => {
     expect(
-      matchIdentity([{ type: "to", name: null, address: "other@nowhere.com" }], identities),
+      matchIdentity([{ type: "to", name: null, address: "other@nowhere.invalid" }], identities),
     ).toBeNull();
   });
 });

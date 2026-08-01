@@ -74,11 +74,11 @@ export function decodeHtmlEntities(text: string): string {
  * 解析 Zoho 的地址字段。
  *
  * 实际格式多样：
- *   "a@b.com"
- *   "Name <a@b.com>"
- *   "a@b.com,c@d.com"
- *   "\"Doe, John\" <john@x.com>, jane@y.com"
- *   "&quot;Doe&quot; &lt;john@x.com&gt;"   ← 正文响应中的转义形式
+ *   "a@b.example"
+ *   "Name <a@b.example>"
+ *   "a@b.example,c@d.example"
+ *   "\"Doe, John\" <john@x.example>, jane@y.example"
+ *   "&quot;Doe&quot; &lt;john@x.example&gt;"   ← 正文响应中的转义形式
  *
  * 逗号既是分隔符又可能出现在引号内的显示名里，因此不能简单 split(",")。
  */

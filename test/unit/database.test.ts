@@ -104,7 +104,7 @@ describe("schema 行为", () => {
     db.prepare(
       `INSERT INTO messages(profile_id,account_id,zoho_message_id,folder_id,subject,from_address,
         received_at,matched_identity_id,first_synced_at,last_synced_at)
-       VALUES ('primary','ACC','999999999999999999','inbox','报价','John@ACME.com',?,?,?,?)`,
+       VALUES ('primary','ACC','999999999999999999','inbox','报价','John@ACME.example',?,?,?,?)`,
     ).run(now, identityId, now, now);
     const messageId = (db.prepare("SELECT id FROM messages").get() as { id: number }).id;
     return { identityId, messageId, now };
@@ -120,12 +120,12 @@ describe("schema 行为", () => {
   it("from_domain 生成列做了小写归一", () => {
     seed();
     const row = db.prepare("SELECT from_domain AS d FROM messages").get() as { d: string };
-    expect(row.d).toBe("acme.com");
+    expect(row.d).toBe("acme.example");
   });
 
   it("from_address 为 NULL 时 from_domain 也是 NULL", () => {
     const now = Date.now();
-    db.prepare("INSERT INTO profiles VALUES ('p','a@b.com','com',?,?)").run(now, now);
+    db.prepare("INSERT INTO profiles VALUES ('p','a@b.example','com',?,?)").run(now, now);
     db.prepare(
       `INSERT INTO messages(profile_id,account_id,zoho_message_id,folder_id,first_synced_at,last_synced_at)
        VALUES ('p','A','1','inbox',?,?)`,
@@ -149,7 +149,7 @@ describe("schema 行为", () => {
   it("删除 message 级联删除 recipients 与 attachments", () => {
     const { messageId, now } = seed();
     db.prepare(
-      "INSERT INTO message_recipients(message_pk,recipient_type,address) VALUES (?,'to','a@b.com')",
+      "INSERT INTO message_recipients(message_pk,recipient_type,address) VALUES (?,'to','a@b.example')",
     ).run(messageId);
     db.prepare(
       `INSERT INTO attachments(message_pk,zoho_attachment_id,filename,first_synced_at,last_synced_at)
@@ -185,7 +185,7 @@ describe("schema 行为", () => {
     expect(() =>
       db
         .prepare(
-          "INSERT INTO message_recipients(message_pk,recipient_type,address) VALUES (?,'xx','a@b.com')",
+          "INSERT INTO message_recipients(message_pk,recipient_type,address) VALUES (?,'xx','a@b.example')",
         )
         .run(messageId),
     ).toThrow();
@@ -207,7 +207,7 @@ describe("schema 行为", () => {
       ),
     ).toContain("idx_messages_folder_time");
 
-    expect(plan("SELECT * FROM messages WHERE from_domain=?", "acme.com")).toContain(
+    expect(plan("SELECT * FROM messages WHERE from_domain=?", "acme.example")).toContain(
       "idx_messages_from_domain",
     );
 
@@ -215,7 +215,7 @@ describe("schema 行为", () => {
       "idx_messages_unread",
     );
 
-    expect(plan("SELECT * FROM message_recipients WHERE address=?", "a@b.com")).toContain(
+    expect(plan("SELECT * FROM message_recipients WHERE address=?", "a@b.example")).toContain(
       "idx_recipients_address",
     );
 

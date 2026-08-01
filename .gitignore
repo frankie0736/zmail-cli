@@ -1,24 +1,71 @@
-# 内部设计文档不公开。
-# 注意：必须写成 docs/* 而不是 docs/ —— 目录整体被排除时，
-# 后面的 ! 放行规则不会生效。
+# ─────────────────────────────────────────────────────────────
+# Credentials and real mail data.
+#
+# This block is first on purpose. It is what stands between a public
+# repository and a leak. Before adding anything below, check that it does
+# not weaken what is here.
+# ─────────────────────────────────────────────────────────────
+
+# OAuth client id / secret
+.env
+.env.*
+!.env.example
+
+# Refresh token captured by the Phase 0 spikes (plaintext, mode 0600)
+spikes/.secrets.json
+
+# Spike output: unredacted API responses and the redaction mapping table
+spikes/out/
+
+# Local data directory: message bodies, attachments, encrypted credential file
+.zmail/
+.zmail-*/
+**/mail.sqlite3
+**/mail.sqlite3-wal
+**/mail.sqlite3-shm
+**/secrets.enc
+
+# Exports contain real mail
+*.mbox
+*.eml
+/export/
+
+# ─────────────────────────────────────────────────────────────
+# Internal design documents.
+#
+# Must be `docs/*`, not `docs/`. Excluding a directory outright makes any
+# later negation inert, which would silently drop the setup guide the
+# README links to.
+# ─────────────────────────────────────────────────────────────
 docs/*
 !docs/oauth-setup.md
 
-# deps / build
+# ─────────────────────────────────────────────────────────────
+# Build output and dependencies
+# ─────────────────────────────────────────────────────────────
 node_modules/
 dist/
 *.tgz
+coverage/
+.vitest/
+*.tsbuildinfo
 
-# spike 产物：含真实令牌与未脱敏邮件数据，绝不入库
-spikes/.secrets.json
-spikes/out/
-
-# 本地数据目录（若在仓库内测试）
-.zmail/
-.zmail-*/
-
-# 杂项
+# ─────────────────────────────────────────────────────────────
+# Editors and operating systems
+# ─────────────────────────────────────────────────────────────
 .DS_Store
-*.log
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*~
 
-.env*
+# ─────────────────────────────────────────────────────────────
+# Logs and scratch space
+# ─────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+pnpm-debug.log*
+/tmp/
+.tmp/

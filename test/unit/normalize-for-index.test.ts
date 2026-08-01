@@ -82,15 +82,15 @@ describe("toAndQuery", () => {
 
 describe("buildIdentityText", () => {
   it("拼接姓名与地址", () => {
-    expect(buildIdentityText([{ name: "John Doe", address: "john@acme.com" }])).toBe(
-      "John Doe john@acme.com",
+    expect(buildIdentityText([{ name: "John Doe", address: "john@acme.example" }])).toBe(
+      "John Doe john@acme.example",
     );
   });
 
   it("没有姓名时只用地址", () => {
-    expect(buildIdentityText([{ address: "a@b.com" }, { name: null, address: "c@d.com" }])).toBe(
-      "a@b.com c@d.com",
-    );
+    expect(
+      buildIdentityText([{ address: "a@b.example" }, { name: null, address: "c@d.example" }]),
+    ).toBe("a@b.example c@d.example");
   });
 });
 
@@ -101,7 +101,7 @@ describe("FTS5 端到端：索引与查询必须用同一个规范化函数", ()
 
   const SUBJECT = "报价单 Q3 quotation";
   const BODY = "客户询价硅胶管，需要样品和交期 silicone tubing sample lead time";
-  const SENDER = "John Doe john@acme.com";
+  const SENDER = "John Doe john@acme.example";
   const RECIPIENTS = "Owner sales@example.com";
 
   beforeEach(() => {
