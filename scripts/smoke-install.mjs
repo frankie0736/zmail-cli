@@ -154,6 +154,23 @@ try {
   const versionEnv = JSON.parse(versionOut);
   check("zmail version --json 输出合法 envelope", versionEnv.ok === true, versionEnv.data?.version);
 
+  // init 之前先跑 doctor：它专门诊断原生模块加载失败并给出可读原因。
+  // 直接 init 的话，better-sqlite3 没装好只会报「打不开数据库」——
+  // 那是症状不是原因，CI 上排查起来毫无线索。
+  let preDoctor;
+  try {
+    preDoctor = JSON.parse(zmail("doctor", "--json"));
+  } catch (err) {
+    preDoctor = JSON.parse(err.stdout || "{}");
+  }
+  const preFailed = (preDoctor?.data?.checks ?? []).filter((c) => c.status === "error");
+  if (preFailed.length > 0) {
+    console.error("\n全局安装后 doctor 报告的问题：");
+    for (const c of preFailed)
+      console.error(`  ✗ ${c.name}: ${c.message}${c.hint ? `\n    → ${c.hint}` : ""}`);
+  }
+  check("安装后原生模块可用", preFailed.length === 0, preFailed.map((c) => c.name).join(", "));
+
   zmail("init", "--json");
   check("数据写入用户 HOME 而非包目录", existsSync(join(dataDir, "mail.sqlite3")), dataDir);
   check(
